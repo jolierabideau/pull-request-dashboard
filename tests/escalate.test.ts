@@ -35,6 +35,23 @@ describe('parseVerdict', () => {
   it('rejects a non-array asks', () => {
     expect(() => parseVerdict({ ...verdict, asks: 'fix it' })).toThrow(/asks/);
   });
+
+  it('rejects a non-numeric blockingCount', () => {
+    expect(() => parseVerdict({ ...verdict, blockingCount: 'two' })).toThrow(/blockingCount/);
+  });
+
+  it('rejects an object blockingCount', () => {
+    expect(() => parseVerdict({ ...verdict, blockingCount: {} })).toThrow(/blockingCount/);
+  });
+
+  it('rejects a negative blockingCount', () => {
+    expect(() => parseVerdict({ ...verdict, blockingCount: -1 })).toThrow(/blockingCount/);
+  });
+
+  it('defaults a missing blockingCount to 0', () => {
+    const { blockingCount, ...rest } = verdict;
+    expect(parseVerdict(rest).blockingCount).toBe(0);
+  });
 });
 
 describe('resolveEscalation', () => {
@@ -67,5 +84,18 @@ describe('resolveEscalation', () => {
 
     expect(await resolveEscalation(review, 'commented-no-footer', store, ask))
       .toBeNull();
+  });
+
+  it('returns null and does not cache when the model returns a malformed payload', async () => {
+    const store = openStore(':memory:');
+    const badAsk = vi.fn().mockResolvedValue({ court: 'nobody' });
+
+    expect(await resolveEscalation(review, 'commented-no-footer', store, badAsk))
+      .toBeNull();
+
+    const goodAsk = vi.fn().mockResolvedValue(verdict);
+    expect(await resolveEscalation(review, 'commented-no-footer', store, goodAsk))
+      .toEqual(verdict);
+    expect(goodAsk).toHaveBeenCalledTimes(1);
   });
 });

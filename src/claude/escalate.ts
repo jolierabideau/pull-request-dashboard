@@ -41,9 +41,13 @@ export function parseVerdict(value: unknown): ClaudeVerdict {
   if (v.confidence !== 'high' && v.confidence !== 'low') {
     throw new Error('Verdict "confidence" must be "high" or "low".');
   }
+  const blockingCount = v.blockingCount === undefined ? 0 : Number(v.blockingCount);
+  if (!Number.isFinite(blockingCount) || blockingCount < 0) {
+    throw new Error(`Verdict "blockingCount" must be a non-negative finite number, got ${String(v.blockingCount)}`);
+  }
   return {
     court: v.court,
-    blockingCount: Number(v.blockingCount ?? 0),
+    blockingCount,
     asks: v.asks.map(String),
     confidence: v.confidence,
   };
