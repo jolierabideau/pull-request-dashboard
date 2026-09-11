@@ -1,0 +1,9 @@
+{
+  "repoPath": "/Users/jolierabideau/dev/paranext-core",
+  "owner": "paranext",
+  "name": "paranext-core",
+  "me": "jolierabideau",
+  "botLogins": ["devin-ai-integration", "dependabot", "github-actions"],
+  "pollIntervalMs": 180000,
+  "staleAfterHours": 48
+}
