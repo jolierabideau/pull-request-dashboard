@@ -43,6 +43,34 @@ describe('classify — drafts', () => {
     }))).toBe('draft');
   });
 
+  // The "Posted to Discord" button renders on draft cards; before this it
+  // stamped the store and changed nothing on screen.
+  it('lets a draft you have posted for review reach asked-no-looks', () => {
+    expect(bucketOf(pr({ isDraft: true }), { discordPostedAt: '2026-09-11T09:00:00Z' }))
+      .toBe('asked-no-looks');
+  });
+
+  it('keeps a posted draft out of the mechanical bucket', () => {
+    expect(bucketOf(
+      pr({ isDraft: true, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }),
+      { discordPostedAt: '2026-09-11T09:00:00Z' },
+    )).toBe('asked-no-looks');
+  });
+
+  // Drafts are excluded from buckets 1-4 only while nobody has reviewed them.
+  it('blocks a reviewed draft mechanically and says why', () => {
+    const result = classify(pr({
+      isDraft: true, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY',
+      checks: [{ name: 'Test', status: 'COMPLETED', conclusion: 'FAILURE' }],
+      reviews: [review({
+        state: 'CHANGES_REQUESTED', submittedAt: '2026-09-09T00:00:00Z',
+        bodyText: 'Reviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).',
+      })],
+    }), none, cfg, NOW);
+    expect(result.bucket).toBe('blocked-mechanically');
+    expect(result.receipts.join(' ')).toMatch(/merge conflicts/i);
+  });
+
   it('lets a reviewed draft be classified normally', () => {
     expect(bucketOf(pr({
       isDraft: true,

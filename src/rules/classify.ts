@@ -23,12 +23,16 @@ export function classify(
 
   // Drafts stay quiet unless somebody has actually reviewed them.
   const draftAndUntouched = pr.isDraft && reviewer === null;
-  if (draftAndUntouched) {
+  if (draftAndUntouched && local.discordPostedAt === null) {
     receipts.push('draft with no reviewer activity');
     return done('draft', receipts, null, null);
   }
+  // A draft you have actively posted for review is no longer quiet: it falls
+  // through to bucket 5 so the "Posted to Discord" button is not a no-op. It
+  // still skips buckets 1-4, which need reviewer activity.
+  if (draftAndUntouched) receipts.push('draft, but posted for review');
 
-  if (!pr.isDraft) {
+  if (!draftAndUntouched) {
     const conflict = conflictState(pr);
     if (conflict === 'conflicting') {
       receipts.push('branch has merge conflicts');
