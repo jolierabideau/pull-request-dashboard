@@ -1,7 +1,29 @@
-import { describe, expect, it } from 'vitest';
-import { buildBoard } from '../src/server/poller.js';
+import { describe, expect, it, vi } from 'vitest';
 import { openStore } from '../src/store/db.js';
 import type { Config, PrInput } from '../src/types.js';
+
+const { mockFetchOpenPrs } = vi.hoisted(() => ({ mockFetchOpenPrs: vi.fn() }));
+const { mockNotify } = vi.hoisted(() => ({ mockNotify: vi.fn() }));
+
+vi.mock('../src/github/client.js', () => ({
+  fetchOpenPrs: mockFetchOpenPrs,
+}));
+vi.mock('../src/git/branches.js', () => ({
+  readBranches: vi.fn(() => []),
+}));
+vi.mock('../src/notify/osascript.js', () => ({
+  NOTIFY_BUCKETS: new Set(['needs-your-response', 'blocked-mechanically', 'ready-to-merge']),
+  notify: mockNotify,
+}));
+
+const { buildBoard, createPoller } = await import('../src/server/poller.js');
+
+/** A promise the test controls the resolution timing of. */
+function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
 
 const cfg: Config = {
   repoPath: '/tmp', owner: 'paranext', name: 'paranext-core',
@@ -57,5 +79,70 @@ describe('buildBoard', () => {
   it('stamps the board with when it was built', () => {
     const board = buildBoard([], [], openStore(':memory:'), cfg, NOW);
     expect(board.fetchedAt).toBe(NOW.toISOString());
+  });
+});
+
+describe('createPoller', () => {
+  it('does not let a slow refresh that started first overwrite a faster later refresh', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    const slow = deferred<PrInput[]>();
+    const fast = deferred<PrInput[]>();
+    mockFetchOpenPrs.mockImplementationOnce(() => slow.promise);
+    mockFetchOpenPrs.mockImplementationOnce(() => fast.promise);
+
+    const poller = createPoller(cfg, openStore(':memory:'));
+    const firstRefresh = poller.refresh();
+    const secondRefresh = poller.refresh();
+
+    // The second (newer) refresh's fetch resolves first, and lands.
+    fast.resolve([pr({ number: 2 })]);
+    await secondRefresh;
+    expect(poller.snapshot()?.items[0]?.number).toBe(2);
+
+    // The first (older, slower) refresh's fetch resolves after — it must
+    // not roll the snapshot back to its own, now-stale result.
+    slow.resolve([pr({ number: 1 })]);
+    await firstRefresh;
+    expect(poller.snapshot()?.items[0]?.number).toBe(2);
+  });
+
+  it('does not let in-flight work land after stop()', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    const inFlight = deferred<PrInput[]>();
+    mockFetchOpenPrs.mockImplementationOnce(() => inFlight.promise);
+
+    const poller = createPoller(cfg, openStore(':memory:'));
+    const refreshing = poller.refresh();
+    poller.stop();
+    inFlight.resolve([pr({ number: 1 })]);
+    await refreshing;
+
+    expect(poller.snapshot()).toBeNull();
+  });
+
+  it('does not send notifications for a superseded refresh', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    const slow = deferred<PrInput[]>();
+    const fast = deferred<PrInput[]>();
+    mockFetchOpenPrs.mockImplementationOnce(() => slow.promise);
+    mockFetchOpenPrs.mockImplementationOnce(() => fast.promise);
+
+    const poller = createPoller(cfg, openStore(':memory:'));
+    const firstRefresh = poller.refresh();
+    const secondRefresh = poller.refresh();
+
+    // The fast refresh has nothing notify-worthy.
+    fast.resolve([]);
+    await secondRefresh;
+
+    // The slow refresh's PR would normally trigger a notification
+    // (blocked-mechanically is in NOTIFY_BUCKETS), but it is superseded.
+    slow.resolve([pr({ number: 1, mergeStateStatus: 'DIRTY' })]);
+    await firstRefresh;
+
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 });

@@ -86,8 +86,19 @@ export interface Poller {
 export function createPoller(cfg: Config, store: Store): Poller {
   let board: Board | null = null;
   let timer: NodeJS.Timeout | null = null;
+  let generation = 0;
+  let stopped = false;
 
   const refresh = async (): Promise<void> => {
+    const mine = ++generation;
+    const superseded = () => stopped || mine !== generation;
+    const commit = (next: Board): void => {
+      // A slower earlier refresh must never overwrite a newer snapshot,
+      // and nothing may land after stop().
+      if (superseded()) return;
+      board = next;
+    };
+
     try {
       const prs = await fetchOpenPrs(cfg);
       const prBranches = new Set(prs.map((p) => p.title));
@@ -95,12 +106,12 @@ export function createPoller(cfg: Config, store: Store): Poller {
       const next = buildBoard(prs, branches, store, cfg, new Date());
 
       await attachVerdicts(next, prs, store);
+      if (superseded()) return;
       sendNotifications(next, store);
-
-      board = next;
+      commit(next);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      board = board === null
+      const staleBoard: Board = board === null
         ? {
             items: [],
             branches: [],
@@ -110,6 +121,7 @@ export function createPoller(cfg: Config, store: Store): Poller {
             error: message,
           }
         : { ...board, stale: true, error: message };
+      commit(staleBoard);
     }
   };
 
@@ -119,7 +131,10 @@ export function createPoller(cfg: Config, store: Store): Poller {
       void refresh();
       timer = setInterval(() => void refresh(), cfg.pollIntervalMs);
     },
-    stop() { if (timer !== null) clearInterval(timer); },
+    stop() {
+      stopped = true;
+      if (timer !== null) clearInterval(timer);
+    },
     refresh,
   };
 }
