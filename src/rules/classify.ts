@@ -91,6 +91,7 @@ export function determineCourt(
 ): Court {
   const newestReview = [...pr.reviews]
     .filter((r) => r.state !== 'PENDING' && r.state !== 'DISMISSED')
+    .filter((r) => r.author === cfg.me || isHumanReviewer(r.author, cfg))
     .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))
     .at(-1);
 

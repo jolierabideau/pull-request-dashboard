@@ -117,6 +117,22 @@ describe('classify — court from the footer', () => {
     }))).toBe('waiting-on-reviewer');
   });
 
+  // Regression: a bot's footerless review must not eclipse a human's footer.
+  it('a bot review after a human footer does not discard the footer', () => {
+    expect(bucketOf(pr({
+      reviews: [
+        review({
+          id: 'h', author: 'katherinejensen00', submittedAt: '2026-09-08T00:00:00Z',
+          bodyText: 'Reviewable status: all files reviewed, 1 unresolved discussion (waiting on katherinejensen00).',
+        }),
+        review({
+          id: 'bot', author: 'devin-ai-integration', submittedAt: '2026-09-09T00:00:00Z',
+          bodyText: 'Automated note.',
+        }),
+      ],
+    }))).toBe('waiting-on-reviewer');
+  });
+
   it('a stale footer yields to later activity', () => {
     expect(bucketOf(pr({
       reviews: [review({
