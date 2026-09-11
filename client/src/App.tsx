@@ -3,6 +3,11 @@ import { fetchBoard, type Board } from './api';
 import { BUCKET_LABEL, BUCKET_ORDER, EXPANDED, type Bucket } from './buckets';
 import { Card } from './Card';
 
+const formatFetchedAt = (iso: string | null): string => {
+  if (iso === null) return 'an unknown time';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export function App() {
   const [board, setBoard] = useState<Board | null>(null);
   const [failed, setFailed] = useState(false);
@@ -24,14 +29,22 @@ export function App() {
 
   useEffect(() => {
     const n = board?.yourCourtCount ?? 0;
-    document.title = n > 0 ? `(${n}) PR Dashboard` : 'PR Dashboard';
-  }, [board?.yourCourtCount]);
+    const base = n > 0 ? `(${n}) PR Dashboard` : 'PR Dashboard';
+    document.title = failed ? `⚠ ${base}` : base;
+  }, [board?.yourCourtCount, failed]);
 
   if (board === null) return <main><p>{failed ? 'API unreachable.' : 'Loading…'}</p></main>;
 
   return (
     <main>
       <h1>{board.yourCourtCount} in your court</h1>
+
+      {failed && (
+        <p className="banner">
+          Cannot reach the dashboard API — showing last-known data from{' '}
+          {formatFetchedAt(board.fetchedAt)}. Will keep retrying every 30s.
+        </p>
+      )}
 
       {board.stale && (
         <p className="banner">
