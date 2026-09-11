@@ -1,0 +1,351 @@
+{
+  "number": 2180,
+  "title": "PT-3493 Storybook Theme Switcher",
+  "url": "https://github.com/paranext/paranext-core/pull/2180",
+  "isDraft": false,
+  "headOid": "38c3305137279428e1e46f3ba029a7884aa1c69d",
+  "mergeable": "UNKNOWN",
+  "mergeStateStatus": "UNKNOWN",
+  "reviews": [
+    {
+      "id": "PRR_kwDOIyvJf87yR_8p",
+      "author": "devin-ai-integration",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-06T22:12:57Z",
+      "bodyText": "Devin Review found 2 potential issues.\nView 7 additional findings in Devin Review.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87yTacd",
+      "author": "devin-ai-integration",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-07T00:28:26Z",
+      "bodyText": "",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87yUv2L",
+      "author": "katherinejensen00",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-07T03:02:32Z",
+      "bodyText": "AI-assisted review (Claude Sonnet 4.6). Full summary in .review/summary.md.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87yU4YB",
+      "author": "katherinejensen00",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-07T03:19:38Z",
+      "bodyText": "Hi Jolie, thank you so much for all of your hard work on this! I took a shot at using the claude review command that TJ set up and those are the comments in the first review. Feel free to keep what is helpful and ignore anything that isn't. I am so excited for this change. Thanks again for implementing the theme switcher in storybook!\n\n@katherinejensen00 reviewed 72 files and all commit messages, and made 2 comments.\nReviewable status: all files reviewed, 11 unresolved discussions (waiting on jolierabideau).\n\n\nlib/platform-bible-react/.storybook/STORYBOOK.md line 1 at r2 (raw file):\n\n# Storybook for `platform-bible-react`\n\nThis documentation is helpful. Thanks for creating it!",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87ye4lX",
+      "author": "jolierabideau",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-07T12:53:42Z",
+      "bodyText": "@jolierabideau made 10 comments.\nReviewable status: all files reviewed, 10 unresolved discussions (waiting on katherinejensen00).\n\n\nlib/platform-bible-react/.storybook/STORYBOOK.md line 1 at r2 (raw file):\nPreviously, katherinejensen00 wrote…\nThis documentation is helpful. Thanks for creating it!\n\nGreat! No problem!",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87yhHqw",
+      "author": "katherinejensen00",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-07T14:12:49Z",
+      "bodyText": "Thanks for making those changes. This looks great!\n\n@katherinejensen00 reviewed 39 files and all commit messages, made 1 comment, and resolved 10 discussions.\nReviewable status:  complete! all files reviewed, all discussions resolved.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87y9Dwn",
+      "author": "katherinejensen00",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-08T15:01:26Z",
+      "bodyText": "@katherinejensen00 reviewed 9 files and all commit messages, and made 1 comment.\nReviewable status:  complete! all files reviewed, all discussions resolved.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87zDtw3",
+      "author": "katherinejensen00",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-08T19:50:04Z",
+      "bodyText": "Thank you for adding the ability to see so many different theme color schemes!\n\n\n@katherinejensen00 reviewed 9 files and all commit messages, and made 1 comment.\nReviewable status:  complete! all files reviewed, all discussions resolved.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87zFEk2",
+      "author": "merchako",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-04-08T20:56:06Z",
+      "bodyText": "@merchako made 8 comments.\nReviewable status: all files reviewed, 5 unresolved discussions (waiting on jolierabideau).\n\n\nlib/platform-bible-react/.storybook/theme-apply.ts line 32 at r5 (raw file):\n\n  'platform-dark': 'dark',\n  'paratext-light': 'paratext-light',\n  'paratext-dark': 'paratext-dark',\n\nThe way that \"dark\" gets added on to each of these themes seems inconsistent. One uses a space and the other uses a hyphen. I'm guessing we don't want that inconsistency.\nCode quote:\n  'shadcn-light': 'theme-shadcn-neutral',\n  'shadcn-dark': 'dark theme-shadcn-neutral',\n  'platform-light': '',\n  'platform-dark': 'dark',\n  'paratext-light': 'paratext-light',\n  'paratext-dark': 'paratext-dark',\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 23 at r5 (raw file):\n\n        Token values for Storybook and the app live in{' '}\n        <a\n          className=\"tw-text-blue-600 hover:tw-underline\"\n\nIt's kinda weird that so much of this content is in a TSX file when it'd be perfect for MDX.\nThis creates situations where there's a bunch of inline Tailwind styles for basic elements like <a> tags, which would normally just be taken care of by the default styles. (I have a suspicion that this non-semantic color is not adaptive for the theme.) If you move this over to MDX, this becomes a non-issue.\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 117 at r5 (raw file):\n\n      </p>\n      <p className=\"tw-text-sm tw-text-slate-600\">\n        <strong>Paratext</strong> is a separate palette (Caffeine-inspired in tweakcn), not vanilla\n\nOptional: link to https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 163 at r5 (raw file):\n\n          <tr>\n            <td>\n              Bad example<div className=\"tw-text-xs\">manual styles, unable to be themed</div>\n\nThere's an ExampleBlock you can use for this in #2162\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 170 at r5 (raw file):\n\n                aria-label=\"Bad example input with manual colors\"\n                readOnly\n                className=\"tw-full tw-file:border-0 tw-col-span-2 tw-flex tw-h-8 tw-rounded-md tw-border tw-border-slate-300 tw-bg-white tw-px-3 tw-py-2 tw-text-sm tw-text-slate-900 tw-ring-offset-white file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-slate-400 focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-slate-400 focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50\"\n\nIs it possible/helpful to use shadcn/ui sementic colors here instead of telling primitives?\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 300 at r5 (raw file):\n\n        .\n      </p>\n      <div className=\"tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-3 2xl:tw-grid-cols-6\">\n\nThese are wrapping left to right and then top to bottom, but I think they should be wrapping top to bottom and left to right because of them being two by three in their nature. (Keep light on top, matching bottom on bottom at full size. )\n\n\nlib/platform-bible-react/.storybook/STORYBOOK.md line 18 at r5 (raw file):\n\n- **Browser tests:** Install Playwright browsers once: `npm run test:storybook:install-browsers` (see [package.json](../package.json)).\n- **Accessibility:** `@storybook/addon-a11y` is enabled with `parameters.a11y.test: 'todo'`. Tighten to `'error'` in CI when violations are under control.\n- **Visual regression:** `@chromatic-com/storybook` is included; follow your team’s Chromatic / CI workflow for baselines and required checks.\n\nToo generic? Unless \"teams\" is supposed to be extension developers\n\nlib/platform-bible-react/src/index.css line 168 at r5 (raw file):\n\n  /**\n   * Stock Shadcn Neutral (HSL) — Storybook-only preview. Not applied in the running app.\n\nI'm fine if you put this in the other theme file (core) if you want",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87zYb1H",
+      "author": "jolierabideau",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-09T14:54:34Z",
+      "bodyText": "@jolierabideau made 3 comments and resolved 2 discussions.\nReviewable status: all files reviewed, 3 unresolved discussions (waiting on merchako).\n\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 23 at r5 (raw file):\nPreviously, merchako (Alex Mercado) wrote…\nIt's kinda weird that so much of this content is in a TSX file when it'd be perfect for MDX.\nThis creates situations where there's a bunch of inline Tailwind styles for basic elements like <a> tags, which would normally just be taken care of by the default styles. (I have a suspicion that this non-semantic color is not adaptive for the theme.) If you move this over to MDX, this becomes a non-issue.\n\nDone.\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 170 at r5 (raw file):\nPreviously, merchako (Alex Mercado) wrote…\nIs it possible/helpful to use shadcn/ui sementic colors here instead of telling primitives?\n\nIt is possible, but I am not sure if it is helpful if the point here is to demonstrate a \"bad example\" of what styling with manual colors looks like- it is not supposed to be themed. I did not create this, I combined my new theming notes with the notes from guides/theming.stories.tsx (now deleted) into this file. Which is also why this file is .tsx\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 300 at r5 (raw file):\nPreviously, merchako (Alex Mercado) wrote…\nThese are wrapping left to right and then top to bottom, but I think they should be wrapping top to bottom and left to right because of them being two by three in their nature. (Keep light on top, matching bottom on bottom at full size. )\n\n\nDone.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87zaEnl",
+      "author": "katherinejensen00",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-09T15:58:53Z",
+      "bodyText": "Thanks for adding the new stories and documentation!\n\n@katherinejensen00 reviewed 10 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 3 unresolved discussions (waiting on merchako).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87zh_Qy",
+      "author": "tjcouch-sil",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-09T22:23:30Z",
+      "bodyText": "",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z00Rj",
+      "author": "jolierabideau",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-10T15:30:36Z",
+      "bodyText": "@jolierabideau made 2 comments.\nReviewable status: 70 of 79 files reviewed, 5 unresolved discussions (waiting on katherinejensen00, merchako, and tjcouch-sil).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z04fN",
+      "author": "tjcouch-sil",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-10T15:33:12Z",
+      "bodyText": "",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z04v4",
+      "author": "tjcouch-sil",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-10T15:33:22Z",
+      "bodyText": "",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z3EBo",
+      "author": "katherinejensen00",
+      "state": "APPROVED",
+      "submittedAt": "2026-04-10T17:08:03Z",
+      "bodyText": "Thanks for your persistence with this, Jolie!\n\n@katherinejensen00 reviewed 9 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 5 unresolved discussions (waiting on jolierabideau and merchako).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z3T1o",
+      "author": "jolierabideau",
+      "state": "COMMENTED",
+      "submittedAt": "2026-04-10T17:21:12Z",
+      "bodyText": "@jolierabideau made 3 comments and resolved 1 discussion.\nReviewable status: all files reviewed, 4 unresolved discussions (waiting on merchako and tjcouch-sil).\n\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 170 at r5 (raw file):\nPreviously, merchako (Alex Mercado) wrote…\n3. Inner card div — redundant tw-text-foreground\nThe tw-text-foreground on the inner card <div> (the pr-twp wrapper) appears redundant — the !tw-text-foreground on the <p> inside it already handles the foreground color override described in the comment. The class on the outer div can be dropped.\nNone of these are blockers, just consistency improvements so the demo component itself follows the same theming conventions it's illustrating. Happy to chat through any of it!\n\nThese are valuable changes, I would prefer to do them in a separate PR if that's okay. This one is really big and I would like to get it merged!",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z3Z6c",
+      "author": "katherinejensen00",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-10T17:26:28Z",
+      "bodyText": "Reviewable status: all files reviewed, 4 unresolved discussions (waiting on merchako and tjcouch-sil).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z39IA",
+      "author": "merchako",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-04-10T17:53:25Z",
+      "bodyText": "@merchako partially reviewed 34 files, made 7 comments, and resolved 2 discussions.\nReviewable status: all files reviewed, 4 unresolved discussions (waiting on jolierabideau and tjcouch-sil).\n\n\nlib/platform-bible-react/.storybook/theme-apply.ts line 32 at r5 (raw file):\nLooks like we still have a naming scheme that doesn't reflect the two-axis way we're handling themes.\n\n\n\nComposite ID\nCSS classes on <html>\nDefined in\n\n\n\n\nshadcn-light\n['theme-shadcn-neutral']\nindex.css:172\n\n\nshadcn-dark\n['dark', 'theme-shadcn-neutral']\nindex.css:205\n\n\nplatform-light\n[] (:root defaults)\nindex.css:36\n\n\nplatform-dark\n['dark']\nindex.css:70\n\n\nparatext-light\n['paratext-light']\nindex.css:102\n\n\nparatext-dark\n['paratext-dark']\n\n\n\n\nIn the latest commit (6512c8a6), the CSS selectors in index.css are:\n\n\n\nSelector\nPurpose\nLine\n\n\n\n\n:root, .light\nPlatform light (default)\n36-37\n\n\n.dark\nPlatform dark\n70\n\n\n.paratext-light\nParatext light\n102\n\n\n.paratext-dark\nParatext dark\n136\n\n\n.theme-shadcn-neutral\nShadcn Neutral light (Storybook-only)\n172\n\n\n.dark.theme-shadcn-neutral\nShadcn Neutral dark (Storybook-only)\n205\n\n\n\nAsk Devin:\n\nWhat is the naming scheme for the different themes and dark mode/light mode look like? How do they compare with best practice, and which files are they in?\n\nDevin sees what I'm getting at:\n1.  Inconsistent CSS class naming convention — The class names don't follow a single pattern:\n    \n    -   Platform: `.light` / `.dark` (bare adjective)\n    -   Paratext: `.paratext-light` / `.paratext-dark` (family-prefixed)\n    -   Shadcn: `.theme-shadcn-neutral` + `.dark` (prefix `theme-` \\+ compound)\n    \n    Best practice would be a uniform scheme, e.g. all `theme-{family}` with `.dark` as a modifier, or all `{family}-{scheme}`. The current mix of conventions means you need to memorize which pattern each family uses. This is partly inherited from the pre-existing `.dark` / `.paratext-*` classes that are shared with production (themes.data.json), so the inconsistency isn't entirely avoidable without a larger refactor.\n\nand more issues\n\nlib/platform-bible-react/src/stories/guidelines/theming-doc.tsx line 170 at r5 (raw file):\nPreviously, jolierabideau wrote…\nThese are valuable changes, I would prefer to do them in a separate PR if that's okay. This one is really big and I would like to get it merged!\n\nI'm not looking at the code because the file's deleted, but that makes sense about the \"bad example\" styling. As for the TSX part, I was under the impression that we could include what are essentially TSX blocks inside the MDX files, but maybe there's part of that or your situation that I don't understand?\nUpdate: but the bad example is missing a display of the code when I think the intention is to show the bad code\n\nlib/platform-bible-react/.storybook/theme-apply.ts line 68 at r8 (raw file):\n\n      return DEFAULT_STORYBOOK_THEME_STATE;\n  }\n}\n\nIn contrast for the names above, these look great!\nCode quote:\nexport function themeStateFromLegacyThemeId(themeId: StorybookThemeId): StorybookThemeState {\n  switch (themeId) {\n    case 'shadcn-light':\n      return { family: 'shadcn-neutral', colorScheme: 'light' };\n    case 'shadcn-dark':\n      return { family: 'shadcn-neutral', colorScheme: 'dark' };\n    case 'platform-light':\n      return { family: 'platform', colorScheme: 'light' };\n    case 'platform-dark':\n      return { family: 'platform', colorScheme: 'dark' };\n    case 'paratext-light':\n      return { family: 'paratext', colorScheme: 'light' };\n    case 'paratext-dark':\n      return { family: 'paratext', colorScheme: 'dark' };\n    default:\n      return DEFAULT_STORYBOOK_THEME_STATE;\n  }\n}\n\nlib/platform-bible-react/src/stories/guidelines/theming.mdx line 63 at r8 (raw file):\n\n**Paratext** is a separate palette (Caffeine-inspired in tweakcn), not vanilla Shadcn; it is not\n\"mostly Slate.\"\n\nThis section is where some of the naming confusion in the theme files starts to show up in the documentation. We should be seeing a 3x2 two-axis presentation of theme families and light/dark schemes here, but instead we're seeing four paragraphs, two of which are about families and two of which are about light/dark mode.\nIf you need help terminology-wise, it can be a challenge to come up with names that convey each of these axes. I think I've seen Apple do it well, and this is what they call them.\n\nAppearance = light/dark/auto\nTheme > Color = multicolor, blue, green, red…\n\nWe need names that have consistent meaning in our codebase and don't overlap or overload other names. So maybe we can treat theme as the overall concept and appearance as the light/dark system and color family as the other axis.\nAppearance includes:\n\nDisplay mode = light/dark/system, and\nColor theme* = Paratext (Caffeine) / Platform.Bible / Shadcn/neutral\n\n* (I'm also open to \"color family\" in case that's less confusing in the codebase)\nWould that work for you? I know this is a lot to be adding in at this point in the review process, but I want to be open about where my head's at before something different gets entrenched to minimize confusion. I'll also send a message to Sebastian about this.\nCode quote:\n## Platform vs Shadcn Neutral vs Paratext\n\nCSS variables live in\n[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css):\nPlatform light is `:root` / `.light`; Platform dark is `.dark`; stock Shadcn\nNeutral is `.theme-shadcn-neutral` (and `.dark.theme-shadcn-neutral`); Paratext is\n`.paratext-light` / `.paratext-dark`. The running app loads Platform and Paratext HSLs from\n[themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json)\n(default Platform family key and `paratext`); Shadcn Neutral is Storybook-only.\n\n**Platform** default (`:root` / `.dark`) is **Slate-based** (blue-gray neutrals) but **not\nidentical** to the stock Shadcn Neutral preset under `.theme-shadcn-neutral` in `storybook-themes.css`.\nUse the toolbar's **Shadcn Neutral** options when you need the closest match to\n[shadcn/ui docs](https://ui.shadcn.com/docs/theming#neutral) for development, UX review, or\ndebugging. Pick **Shadcn Neutral** under Theme and set Color scheme to light or dark (or system).\n\n**Light:** Platform differs from stock Neutral on **popover** (tinted vs pure white),\n**secondary / muted / accent** neutrals (Platform `210 50% 95%` vs Neutral `0 0% 96.1%`), and\nthe full **sidebar-\\*** token block (Platform stays Slate-aligned; Neutral follows the docs\nscaffold).\n\n**Dark:** Platform uses solid **border** / **input** grays; stock Neutral uses semi-transparent\nwhite on dark. Sidebar styling also differs (including Neutral's violet **sidebar-primary** in\nthe docs preset).\n\n**Paratext** is a separate palette (Caffeine-inspired in tweakcn), not vanilla Shadcn; it is not\n\"mostly Slate.\"\n\nlib/platform-bible-react/src/stories/guidelines/theming.mdx line 90 at r8 (raw file):\n\n    <tr>\n      <td>\n        Bad example<div className=\"tw-text-xs\">manual styles, unable to be themed</div>\n\nYou probably want to also display the code for this (currently, it's only rendered).\nCode quote:\nBad example<div className=\"tw-text-xs\">manual styles, unable to be themed</div>",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z4mSF",
+      "author": "katherinejensen00",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-10T18:24:33Z",
+      "bodyText": "@katherinejensen00 reviewed 6 files and all commit messages.\nReviewable status: all files reviewed, 4 unresolved discussions (waiting on jolierabideau and tjcouch-sil).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf87z7Siv",
+      "author": "merchako",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-10T20:48:25Z",
+      "bodyText": "@merchako reviewed 51 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 4 unresolved discussions (waiting on jolierabideau and tjcouch-sil).\n\n\nlib/platform-bible-react/.storybook/BRANDING.md line 3 at r10 (raw file):\n\n# Paratext / Platform.Bible branding in Storybook\n\nThis guide explains how the **Storybook manager** (outer chrome: sidebar, toolbar, panels) and the **preview iframe** (Canvas and Docs) can be aligned with Paratext or internal branding. Preview appearance combines **Color scheme** (light / dark / system) and **Theme** (Shadcn Neutral, Platform, Paratext), applied via [manager.tsx](./manager.tsx) (toolbars + direct iframe DOM update), [theme-apply.ts](./theme-apply.ts), and [theme-decorator.ts](./theme-decorator.ts) — not `globals.theme`, so Docs scroll is preserved when switching themes. Customizing the manager shell (logos, `brandTitle`, light/dark chrome) is **optional** and does not affect story output.\n\nIn flux. See discussion in https://ptb.discord.com/channels/892072317436448768/1492222711303241999/1492223016258633998\nCode quote:\nPreview appearance combines **Color scheme** (light / dark / system) and **Theme** (Shadcn Neutral, Platform, Paratext)",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf871s3q-",
+      "author": "katherinejensen00",
+      "state": "DISMISSED",
+      "submittedAt": "2026-04-16T15:32:42Z",
+      "bodyText": "@katherinejensen00 reviewed 2 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 4 unresolved discussions (waiting on jolierabideau and tjcouch-sil).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf873tXfN",
+      "author": "katherinejensen00",
+      "state": "APPROVED",
+      "submittedAt": "2026-04-22T15:22:03Z",
+      "bodyText": "@katherinejensen00 reviewed 6 files and all commit messages.\nReviewable status: all files reviewed, 4 unresolved discussions (waiting on jolierabideau and tjcouch-sil).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABAx2wmw",
+      "author": "jolierabideau",
+      "state": "COMMENTED",
+      "submittedAt": "2026-05-22T16:40:10Z",
+      "bodyText": "I am merging this to unblock UX. I have made note of the review items that were not completed and will follow up.\n\n@jolierabideau made 3 comments and resolved 2 discussions.\nReviewable status: 15 of 83 files reviewed, 2 unresolved discussions (waiting on katherinejensen00, merchako, and tjcouch-sil).",
+      "lastEditedAt": null
+    }
+  ],
+  "comments": [
+    {
+      "author": "jolierabideau",
+      "createdAt": "2026-04-09T00:39:54Z"
+    },
+    {
+      "author": "merchako",
+      "createdAt": "2026-04-10T16:58:26Z"
+    },
+    {
+      "author": "merchako",
+      "createdAt": "2026-04-10T18:20:11Z"
+    },
+    {
+      "author": "merchako",
+      "createdAt": "2026-05-22T15:51:56Z"
+    }
+  ],
+  "commits": [
+    {
+      "oid": "145c22cebdf59d29d34009804978e5d52105dbd9",
+      "committedDate": "2026-05-19T15:32:16Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3493: Storybook theme switcher (Color scheme × Theme family)",
+      "parentCount": 1
+    },
+    {
+      "oid": "9f43a63900e88eea09dde280e5a486530d6797db",
+      "committedDate": "2026-05-19T15:33:53Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge branch 'main' of github.com:paranext/paranext-core into pt-3493…",
+      "parentCount": 2
+    },
+    {
+      "oid": "38c3305137279428e1e46f3ba029a7884aa1c69d",
+      "committedDate": "2026-05-22T16:19:40Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge branch 'main' of github.com:paranext/paranext-core into pt-3493…",
+      "parentCount": 2
+    }
+  ],
+  "threads": [
+    {
+      "isResolved": true,
+      "lastCommentAuthor": "devin-ai-integration",
+      "lastCommentAt": "2026-04-06T22:12:55Z"
+    },
+    {
+      "isResolved": true,
+      "lastCommentAuthor": "devin-ai-integration",
+      "lastCommentAt": "2026-04-07T00:28:25Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:41Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:40Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:40Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:41Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:40Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:41Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:42Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:40Z"
+    },
+    {
+      "isResolved": false,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-04-07T12:53:42Z"
+    },
+    {
+      "isResolved": true,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-05-22T16:40:09Z"
+    },
+    {
+      "isResolved": true,
+      "lastCommentAuthor": "jolierabideau",
+      "lastCommentAt": "2026-05-22T16:40:10Z"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Analyze (csharp)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on windows-latest, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Analyze (javascript)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on macos-latest, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on ubuntu-22.04, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "code-review/reviewable",
+      "status": "COMPLETED",
+      "conclusion": "PENDING"
+    },
+    {
+      "name": "CodeQL",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    }
+  ]
+}

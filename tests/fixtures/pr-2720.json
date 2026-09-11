@@ -1,0 +1,105 @@
+{
+  "number": 2720,
+  "title": "docs: identify architecture decisions by slug instead of number",
+  "url": "https://github.com/paranext/paranext-core/pull/2720",
+  "isDraft": false,
+  "headOid": "24d51e155efe53b897c38bdb98e895c653dc931a",
+  "mergeable": "UNKNOWN",
+  "mergeStateStatus": "UNKNOWN",
+  "reviews": [
+    {
+      "id": "PRR_kwDOIyvJf88AAAABK-682w",
+      "author": "katherinejensen00",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-08-26T15:00:27Z",
+      "bodyText": "Thanks for doing the renaming, Jolie!\n\nprd-power-donna-…-0-003/brief.md:3 — a frozen record was edited. Revert it. Sharpened: the PR skipped 08_Checklists.md:35, which has an identical pointer to the log and is not frozen. So the one research file it touched was the off-limits one, and the one it left alone was fair game.\nresource-text-panel.web-view.tsx:408 + verse-display.utils.ts:12 — adr-verse-zero-resolves-to-verse-one drops the title's \"on single-verse display surfaces\" qualifier, so the slug asserts the rule the sentence is negating (\"chapter surfaces must not…\"). Someone \"fixes\" the chapter view and blanks the Psalm superscriptions.\nEntry-Point-Guide.md:127 — an undisclosed third semantic change: a deliberately vague pointer with no ADR number was hardened into a precise citation. Target's right, but it invents a citation, and the body says the two disclosed fixes are \"the only semantic changes.\"\nArchitecture-Decisions.md:758/:761 — the in-review fix left \"this decision\" where the only named decision is a different entry. Binds to the wrong one, read\n\n\n@katherinejensen00 reviewed 19 files and all commit messages, and made 2 comments.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).\n\n\n.context/standards/Architecture-Decisions.md line 105 at r1 (raw file):\n\n## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects\n\n- **Formerly:** ADR-0003\n\n\nprd-power-donna-…-0-003/brief.md:3 — a frozen record was edited. Revert it. Sharpened: the PR skipped 08_Checklists.md:35, which has an identical pointer to the log and is not frozen. So the one research file it touched was the off-limits one, and the one it left alone was fair game.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABLAqCDw",
+      "author": "katherinejensen00",
+      "state": "APPROVED",
+      "submittedAt": "2026-08-26T18:31:22Z",
+      "bodyText": "Great work, Jolie!\n\n@katherinejensen00 reviewed 14 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).",
+      "lastEditedAt": null
+    }
+  ],
+  "comments": [
+    {
+      "author": "jolierabideau",
+      "createdAt": "2026-08-26T15:52:50Z"
+    }
+  ],
+  "commits": [
+    {
+      "oid": "6f44062048bfbdc3258e379adadcd9b89dd0cfb7",
+      "committedDate": "2026-08-26T15:37:31Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "docs: identify architecture decisions by slug instead of number",
+      "parentCount": 1
+    },
+    {
+      "oid": "350da2367d8c96defdd48d87879c674dd591a302",
+      "committedDate": "2026-08-26T15:37:47Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: correct mis-pointed ADR references and normalize slug citations",
+      "parentCount": 1
+    },
+    {
+      "oid": "541d77ef504e446d7226e29f42200d44e57bc052",
+      "committedDate": "2026-08-26T15:45:02Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: address review feedback on ADR slug identity",
+      "parentCount": 1
+    },
+    {
+      "oid": "24d51e155efe53b897c38bdb98e895c653dc931a",
+      "committedDate": "2026-08-26T16:56:10Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "docs: drop scratch review notes and local drafts from the branch",
+      "parentCount": 1
+    }
+  ],
+  "threads": [],
+  "checks": [
+    {
+      "name": "Analyze (csharp)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on windows-latest, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Analyze (javascript)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on macos-15, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on ubuntu-22.04, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "code-review/reviewable",
+      "status": "COMPLETED",
+      "conclusion": "PENDING"
+    },
+    {
+      "name": "CodeQL",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    }
+  ]
+}

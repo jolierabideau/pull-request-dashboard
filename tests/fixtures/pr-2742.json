@@ -1,0 +1,313 @@
+{
+  "number": 2742,
+  "title": "PT-4435: Show a visible connection-lost state when the socket dies",
+  "url": "https://github.com/paranext/paranext-core/pull/2742",
+  "isDraft": false,
+  "headOid": "3f4aa5fd70967c6aaa7713dfbc3bd40e4618fdb7",
+  "mergeable": "UNKNOWN",
+  "mergeStateStatus": "UNKNOWN",
+  "reviews": [
+    {
+      "id": "PRR_kwDOIyvJf88AAAABMIUA3w",
+      "author": "katherinejensen00",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-09-04T03:47:05Z",
+      "bodyText": "Second review pass\nRe-reviewed after the Alert/Radix rewrite. Almost everything below is a consequence of that rewrite being made from code-review findings without the result ever being rendered — so I'd treat \"look at it running\" as the top action item, not a formality.\nBlocking\nThe keyboard-containment test doesn't test containment. overlay-connection-lost.component.test.tsx:196-201\nVerified by mutation: changing the component to <Dialog open modal={false}> — which disables Radix's trapFocus — leaves all 12 tests in the file green. Removing the Dialog entirely fails only at line 194 (expect(reload).toHaveFocus()), which is autofocus, not containment. So the suite pins \"something focuses Reload\" and nothing else.\nCause is environmental: userEvent.tab() doesn't move focus out of a DialogContent in this jsdom setup even with modal={false}, though it moves normally between two plain buttons.\nA falsifiable proxy does exist and flips with modal: Radix's hideOthers stamps `aria-hidden=\" a real-browser interaction test, would restore the guarantee. As it stands, the one behavior the ADR chose Radix for is unverified.\nRendering bugs introduced by the Alert composition\n1. The Reload button will overlap the banner text. overlay-connection-lost.component.tsx:181\nAlertAction is tw:absolute tw:top-2 tw:end-2 (alert.tsx:89) — outside the alert's grid flow — and the only space reserved for it is tw:has-data-[slot=alert-action]:pe-18 on the Alert base (alert.tsx:12), i.e. 72px, less the 8px end-2 offset = 64px of clearance.\nbutton sits at about y=8-36px inside the alert, spanning the title row and the first line of the description.\nMaximized and in English the description happens not to reach that far. Below roughly 750px, or in any locale with a longer label, the first line wraps out to the padding edge and runs under the button. The Alert action slot is built for a short action like \"Retry\" or an icon, not a two-or-three-word label on a full-window-width strip.\n2. asChild silently defeats the destructive description colour. overlay-connection-lost.component.tsx:178\nRadix Slot merges as {...slotProps, ...childProps}, so DialogDescription's data-slot=\"dialog-description\" reaches AlertDescription as a prop and is spread after its own data-slot=\"alert-description\" (atw:text-muted-foreground.\nResult: a destructive-tinted strip with a text-destructive title and a plain muted-grey message, which is the weakest contrast pairing on this banner, dark mode especially. The id / aria-labelledby / aria-describedby wiring is unaffected and does work.\nFix is either className=\"tw:text-destructive/90\" on AlertDescription at the call site, or restoring data-slot=\"alert-description\" on the child.\nENGLISH_FALLBACKS[CONNECTION_LOST_MESSAGE_KEY] is the un-expanded template. The component runs it through formatReplacementString before passing it down; the stories pass it straight through. The comment two lines above (\"so the stories cannot drift from the text the app actually renders\") currently asserts the opposite of what the file does.\nWorth fixing before anyone follows the PR's own review-focus list, which sends the reviewer to exactly these two stories.\nDialogContent unconditionally renders DialogOverlay (dialog.tsx:110-113), so a tw:bg-black/10 + backdrop-blur-xs layer at z-index 450 sits under this component's tw:bg-background/70 at 800 — a compounded blur-then-wash treatment that hasn't been looked at.\nThe comment explaining this is also inaccurate: DialogOverlay does accept and merge style (dialog.tsx:59-72). What's missing is a way for DialogContent to forward one — it forwards overlayClassName, which would let you neutralize the built-in backdrop from here.\nThe override string doesn't cancel DialogContent's tw:data-open:zoom-in-95, and nothing in it conflicts, so tailwind-merge keeps it. For about 100ms the full-viewport scrim is drawn at 95% scale about its centre — a band of un-dimmed, still-live-looking app around all four edges. tw:data-open:zoom-in-100, or dropping animate-in here, fixes it. FirstRunOverlay has the same gap, so fixing both keeps the two gates consistent.\nDesign gaps\nConnectionLostOverlayPresentational and FirstRunGate are both Radix modal Dialogs, and Radix's DismissableLayer and FocusScope arbitrate by mount order, not z-index. z-index only decides what is visible.\nSo if the first-run gate mounts after the connection-lost state, the connection-lost scrim is the only thing visible (800 > 700), but its Reload button gets pointer-events: none and the focus trap sits in the invisible wizard behind the scrim — where the error effect actively calls retryButtonRef.current?.focus() (first-run-overlay.component.tsx:1resolveInternal seeds { kind: 'app' } and then runs startBackgroundRegistrationRecheck() (first-run-store.ts:236), which can re-raise the gate at any later moment, including after the socket has died. Same for waitForRegistration → applyStatus({ kind: 'error' }) (first-run-store.ts:266) resolving late off a probe that was in flight when the connection dropped.\nThe ADR's reasoning for 800 > 700 is right; the mechanism just doesn't implement it. Options are suppressing other app-gating modals once the connection-lost state latches, or keyboard-shortcuts.data.ts:148\nA Radix FocusScope constrains where DOM focus lands; it doesn't stop handlers bound above or outside the focused element. Two categories still fire while the scrim is up:\n\nMain-process before-input-event handlers (main.ts:1295-1332) intercept keys before any renderer frame sees them: F12, Ctrl+Tab / Ctrl+Shift+Tab, and the PT9 verse-navigation set (F8/Ctrl+F8, F9/Ctrl+F9, Ctrl+Up/Down, Ctrl+B). All travel over the dead\nnotification-display.tsx:104 registers a document-level keydown for Alt+T, which bubbles from the dialog content regardless of focus scope.\n\nThat's the silent-failure mode this feature exists to end, reached by keyboard instead of pointer. Gating the first category needs main to know the renderer has latched, which cuts against the renderer-local design — so documenting the gap may well be the right call, but the entry, the component doc block, and the ADR's \"Keyboard gate\" bullet currently overstate what's covered.\nThe documented startup race follows from wiring the subscription in a React effect, and the ADR justifies it by citing initWorkspaceUpdatingService. But src/renderer/index.tsx starts three renderer-lifetime subscriptions — initAutoSyncBlockingService(), initAutoSyncEditBlockDriver(), initSyncActivityService() — directly in the startup IIFE, with comments saying they return unsubscribers deliberately never called. That's exactly this store's shape.\nMoving the call there, or subscribing at module-import time in the store (the emitter exists at module load\n9. Main already solved the quit-time false positive. rpc-client.ts:387\nrpc-server.ts:325 computes const diedDuringShutdown = !isClean && isAppShuttingDown(); from shutdown-latch.service. The client end has no equivalent — isCleanCloseEvent rejects 1006 identically whether the network broke or the app is quitting. So on an ordinary quit the store latches and the overlay is asked to render, and whether the user sees a flash depends only on paint timingignore losses once set. Worth doing rather than leaving as a timing-dependent invisible.\nDocumentation accuracy\n10. The PR is no longer mergeable. git rev-list --count HEAD..origin/main reports 2 (8f230e863b9 PT-4325, 55a5c54dcf1 PT-4240), and GitHub reports mergeable: CONFLICTING / mergeStateStatus: DIRTY. The body still says \"0 commits behind main and mergeable\". Conflicts are most likely the commdark, while the same body says the screenshots predate the review because the banner moved onto Alert`, and the review section says nothing was run in the live app. Findings 1-5 are what that gap cost.\n12. The ADR's Signal section describes code that no longer exists. Architecture-Decisions.md:2879\nIt declares PlatformEvent<undefined> (all four declarations ship PlatformEvent<void>), says \"the payload is undefined on purpose\", and quotes the emission verbatim as irelays \"using the same shape as the existing onDidDisconnectClientrelay immediately above it\", but the same review round extracted both intorelayWhileUp`, so there's no duplicated shape to mirror. Line citations are stale throughout (export is at 156 not 158; subscription at 224 not 199).\nThis log gets read for precedent by people and by pt10-reuse-scout, so a wrong snippet propagates.\n**13. The ADR leaves its own open future reader can tell the check happened.\n14. The toolbar-height rationale is contradicted by the overlay's own imports. toolbar-height.util.ts:10\nThe comment says the constants couldn't live in platform-dock-layout-positioning.util.ts because the overlay can't reach the clearance \"through a module that pulls in the network services\". But the overlay already does, transitively: `overlay-connection-lost.componentdirectly.\nThe real invariant is that no PAPI round trip happens on the reaction path — the hooks resolved while the socket was alive and their values persist. A dead websocket doesn't make an imported module fail. The actual reason to avoid the positioning util is the dialogs-barrel import cycle its own header describes, which is what dock-tab-group.util.ts was extracted for.\nFlagging this specifically becauseasserts the reaction path makes no PAPI call and no lint rule constrains imports, so it's one convenience import away from silent regression.\nSmaller items\n\nalert.tsx:87 — AlertAction becomes public API here, and its only TSDoc is @inheritdoc Alert, which resolves to a description of Alert. Nothing tells a consumer it positions children absolutely, must be a child of Alert, or that Alert reserves its space via pe-18 so an action rendered outside it will overlap.toolbar\") is unqualified on the Power-mode value.\nrpc.interface.ts:148 — required rather than optional is the right call. But the sibling onDidDisconnectClient (119-133) carries an explicit \"platform-internal core plumbing, not part of the @papi/* surface\" note and the new member drops it, and both are emitted verbatim into papi.d.ts.\nconnection-lost-store.ts:53 — @internal trails prose on the same line, so tooling parses it as body text and the export isn't actually marked internal.\noverlay-connection-lost.componeuse-backend-sync-activity.hook.ts:32), and it re-reads on subscribe, closing by construction the gap the manual syncState()` handles by hand.\noverlay-connection-lost.component.tsx:235 — localizedOrEnglish(KEY, localizedStrings[KEY]) written four times, each passing the same key twice.\nconnection-lost-store.ts — the sibling pair splits state from wiring (workspace-updating-store.ts has zero imports; workspace-updating-service.ts does the network subscription). Collapsing both into one module is why app.component.test.tsx had to mock the store outright. The bespoke store\nkeyboard-shortcuts.data.ts:146 — the entry documents Tab containment, which is Radix's default in every Dialog and isn't catalogued for any of them including the first-run gate. Meanwhile the handler this PR actually adds — onEscapeKeyDown prevented at component.tsx:146, making Escape inert where it closes every other dialog — isn't documented, and the dismiss-overlays entry says \"A modal dialog on top is left to its own shell\", so a reader has no way to learn this one swallows it.\nnetwork.service.test.ts:101 — the double still models the subscriber as (event: undefined) => void. It's laundered through as unknown as, so nothing type-checks it against\nTest counts are per-file rather than per-test: network.service.test.ts has 6 it blocks of which 3 are new, app.component.test.tsx 7 of which 2 are new. New tests total 31, not 39, and neither file is a new suite.\nThe \"Things to scrutinise\" bullet says the scrim \"blocks keyboard as well as pointer\". The scrim blocks pointers; containment comes from FocusScope. The ADR, doc block and catalog entry all say it correctly — just that bullet still describes the hand-rolled behaviour.\n\nOn the design\nThe core call is sound and the reasoning is unusually well recorded. The no-PAPI-on-the-reaction-path constraint is the right one, mounting unconditionally from startup so the hooks resolve while the socket is alive is the right consequence, and latching without a false transition is right given no reconnect exists. Findings 6 through 9 are all cases where the implementation doesn't yet deliver something the ADR correctly argues for, not cases where the argument is wrong.\nunconditionally from startup so the hooks resolve while the socket is alive is the right consequence, and latching without a false transition is right given no reconnect exists. Findings 6 through 9 are all cases where the implementation doesn't yet deliver something the ADR correctly argues for, not cases where the argument is wrong.\nReview was AI-assisted (multi-perspective pass). Line references and the mergeability claim were checked against the branch; the button-width numbers in finding 1 are estimated from class definitions rather than measured.\nTwo things I'd flag as yours to weigh rather than the author's: whether the \"Reload anyway\" label plus no dismissal path is enough (Ryan's call unconditionally from startup so the hooks resolve while the socket is alive is the right consequence, and latching without a false transition is right given no reconnect exists. Findings 6 through 9 are all cases where the implementation doesn't yet deliver something the ADR correctly argues for, not cases where the argument is wrong.\nReview was AI-assisted (multi-perspective pass). Line references and the mergeability claim were checked against the branch; the button-width numbers in finding 1 are estimated from class definitions rather than measured.\n\n@katherinejensen00 partially reviewed 38 files and all commit messages, and made 2 comments.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).\n\n\nsrc/renderer/components/overlays/overlay-connection-lost.component.tsx line 181 at r1 (raw file):\n\n              <AlertDescription>{message}</AlertDescription>\n            </DialogDescription>\n            <AlertAction>\n\n1. The Reload button will overlap the banner text. overlay-connection-lost.component.tsx:181\nAlertAction is tw:absolute tw:top-2 tw:end-2 (alert.tsx:89) — outside the alert's grid flow — and the only space reserved for it is tw:has-data-[slot=alert-action]:pe-18 on the Alert base (alert.tsx:12), i.e. 72px, less the 8px end-2 offset = 64px of clearance.\nbutton sits at about y=8-36px inside the alert, spanning the title row and the first line of the description.\nMaximized and in English the description happens not to reach that far. Below roughly 750px, or in any locale with a longer label, the first line wraps out to the padding edge and runs under the button. The Alert action slot is built for a short action like \"Retry\" or an icon, not a two-or-three-word label on a full-window-width strip.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABMqW_7w",
+      "author": "katherinejensen00",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-09-08T16:58:12Z",
+      "bodyText": "PR #2742 — Round 3 Review Summary\nPT-4435: Show a visible connection-lost state when the socket dies\nReviewed at 8ff695c54ace124c7605a74ffa6eae7430cea848 · 2026-09-08 · not posted to GitHub\nFull detail: pr-review-2742-round3.md. Round 2's report is preserved at pr-review-2742.md.\nVerdict: 1 blocking, 15 warnings, 16 suggestions. Seven perspectives (security, scope, ux,\ncontracts, tests, architecture, clarity), each given both prior rounds as a dedup list and told to\nverify the claimed fixes rather than trust them.\n\nVerified as genuinely fixed\nRecorded so round 4 doesn't re-check them. Established by mutation or by reading the code, not from\nthe author's response.\n\nRound 2's blocking finding is properly fixed. With modal={false} the suite now goes red with\nexactly one failure — the aria-hidden containment assertion, not autofocus. That is the\nseparation round 2 asked for.\nThe quit-time guard is well covered by tests (separate from whether it fires in production —\nsee W1). Dropping the shutdown latch turns 3 tests red; both orderings are pinned.\nRendering fixes 1–4 verified mechanism by mechanism, including running the repo's own\nextendTailwindMerge({prefix:'tw'}) to confirm the grid and backdrop overrides actually collapse.\nAll four contract fixes landed; papi.d.ts and platform-bible-react/dist/ verified in sync\nwith source; AlertAction genuinely un-exported.\n\"37 tests\" verified exactly, cross-checked two ways.\nThe reaction path is genuinely PAPI-free, with no injection surface and no secrets.\n\nTree confirmed clean at the PR head after every mutation run.\n\nBlocking\nB1 — Banner text fails WCAG AA in the Platform dark theme\nsrc/renderer/components/overlays/overlay-connection-lost.component.tsx:224\nRound 2 asked for the destructive description colour to be restored. Restating\ndata-slot=\"alert-description\" did that — and put the copy onto a token the codebase explicitly\ndocuments as not text-grade. lib/platform-bible-react/src/index.css:73:\n\n--diff-deleted added — text-grade red … --destructive is background-grade in Platform dark.\n\n.dark sets --destructive: oklch(0.396 0.1331 25.71) (≈ red-900). Against the banner's ground:\n\n\n\nElement\nToken\nContrast\n\n\n\n\nTitle\ntw:text-destructive\n≈ 2.0:1\n\n\nDescription\ntw:text-destructive/90\n≈ 1.8:1\n\n\n\nAA needs 4.5:1. The pre-fix text-muted-foreground was ≈ 8:1 there, so the fix made the message\nstrictly harder to read. Light Platform is better but still short (≈ 3.3:1). .paratext-dark is fine.\nBlocking because this is the screen a user reaches when nothing else in the app works, and reading it\nis the entire point of the feature. One-token fix at the call site: --diff-deleted is the token the\ntheme provisions for exactly this, or use an opaque destructive ground with\ntext-destructive-foreground, or fall back to tw:text-foreground.\n\nConsidered and deliberately not called blocking\n\nQuit-time latch never arms on quit (W1). main.ts calls newWindow.destroy() on the\nisAppGoingDown branch, and its own comment says destroy() skips beforeunload; pagehide is\nin the same skipped sequence. So markShuttingDown() runs only when the app stays up. Behaviour\nis no worse than before — the banner is still kept off-screen by teardown timing — but the code\ncomment, store doc, and ADR now all assert a guarantee that doesn't hold. Documentation defect.\nFirst-run stand-down has zero coverage (W3). Deleting the line leaves 139/139 green. The code\nis correct; only the pin is missing. Blocking-adjacent, since the late-raise path is what a\nrefactor breaks silently and the failure mode is severe (Reload visible, focus trapped in an\ninvisible wizard).\nzoom-in-100 doesn't override zoom-in-95 (W2). Genuinely unfixed rather than merely\nundocumented, but the symptom is a ~100ms band of un-dimmed app during the open animation.\n\n\nThe rest, by theme\nCorrectness / behaviour\n\nW2 — tailwind-merge has no class group for tw-animate-css, so both zoom classes ship and\nstylesheet source order decides. The live measurement can't detect this (animate-in sets no\nfill-mode, so the transform reads none afterwards either way). Round-2 finding 5 is unverified.\nW4 — the documented keyboard gap omits PlatformMenubar's five document-level Alt hotkeys, which\npull focus out of the FocusScope and open a menu whose items dispatch over the dead socket. It's\nthe one category that is renderer-local, so it needs no main→renderer relay to close.\nW5 — OverlayHost/OverlayModalDialog didn't get the stand-down FirstRunOverlay got; a\nshowDialog in flight when the socket dies mounts after and takes the focus trap. Narrow window;\nthe two reviewers disagreed on reachability.\n\nTests\n\nW3 above, plus: the seam test's not.toHaveBeenCalled() is a negative assertion with nothing to be\na negative of; the scrim test mirrors four Tailwind class names; index.tsx's module-scope\nordering constraint is carried only by a comment. At PR level — real keyboard containment is now\npinned by an aria-hidden proxy plus a one-off manual CDP pass, and e2e-tests/ gained nothing.\n\nDocumentation drift (the bulk of the warnings)\n\nW7 — merging this turns twelve existing TODO(PT-4435) markers into pointers at a closed ticket\nthat deliberately didn't do the reconnect work; three say \"when PT-4435 lands, drop the .fails\".\nW8 — the ADR's \"line numbers are deliberately omitted\" is contradicted by four surviving citations,\nthree already stale on this commit.\nW9 — the PR body drifted again in four places: two \"Things to scrutinise\" bullets describe risks\nthe branch already closed; the scope list omits first-run-overlay.component.tsx and still cites\nthe withdrawn AlertAction export; \"0 commits behind main\" is stale for the second round; and the\nADR conflict resolution is described as \"append order\", which the append-model-is-dead ADR in this\nvery diff forbids (outcome was right, method described is wrong).\nW12–W15 — tests deferring coverage to a non-existent docs/superpowers/plans/; a doc paragraph\nover-generalizing what needs main's involvement; an ADR reference to the non-existent\ninitConnectionLostStore(); three deferrals with no grep-able marker.\n\nMerge readiness\n\nW10 — conflicting with main again, 1 commit behind. Conflicts are only the committed\ndist/index.cjs and dist/index.js bundles: resolve by rm -rf dist + rebuild, not by\nhand-merging. HEAD is also a merge commit, not a rebase, despite the body saying \"rebased\".\n\n\nSuggested next steps\n\nFix B1 — one token, and it's the feature's whole point.\nDecide W1: correct the comment/doc/ADR to say the latch covers window-close and reload only, or\ndefer the quit case to the follow-up ticket.\nAdd the first-run stand-down test (W3) — cheap, and it guards a severe failure mode.\nMake the zoom cancellation deterministic (W2), here and in first-run-overlay.component.tsx:58.\nFile the follow-up ticket so W7's twelve TODOs and W15's three deferrals get a real ID.\nSync with main and rebuild dist/.\nReconcile the PR body with the diff before a human reviewer reads it (W9).\n\n\n@katherinejensen00 partially reviewed 43 files and all commit messages, made 1 comment, and resolved 1 discussion.\nReviewable status:  complete! all files reviewed, all discussions resolved.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABMqigiw",
+      "author": "katherinejensen00",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-09-08T17:18:28Z",
+      "bodyText": "@katherinejensen00 made 1 comment.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).\n\n\nsrc/renderer/components/overlays/overlay-connection-lost.component.tsx line 224 at r3 (raw file):\nB1 — Banner text fails WCAG AA in the Platform dark theme\nsrc/renderer/components/overlays/overlay-connection-lost.component.tsx:224\nRound 2 asked for the destructive description colour to be restored. Restating\ndata-slot=\"alert-description\" did that — and put the copy onto a token the codebase explicitly\ndocuments as not text-grade. lib/platform-bible-react/src/index.css:73:\n\n--diff-deleted added — text-grade red … --destructive is background-grade in Platform dark.\n\n.dark sets --destructive: oklch(0.396 0.1331 25.71) (≈ red-900). Against the banner's ground:\n\n\n\nElement\nToken\nContrast\n\n\n\n\nTitle\ntw:text-destructive\n≈ 2.0:1\n\n\nDescription\ntw:text-destructive/90\n≈ 1.8:1\n\n\n\nAA needs 4.5:1. The pre-fix text-muted-foreground was ≈ 8:1 there, so the fix made the message\nstrictly harder to read. Light Platform is better but still short (≈ 3.3:1). .paratext-dark is fine.\nBlocking because this is the screen a user reaches when nothing else in the app works, and reading it\nis the entire point of the feature. One-token fix at the call site: --diff-deleted is the token the\ntheme provisions for exactly this, or use an opaque destructive ground with\ntext-destructive-foreground, or fall back to tw:text-foreground.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABMtBqiw",
+      "author": "katherinejensen00",
+      "state": "COMMENTED",
+      "submittedAt": "2026-09-08T22:06:03Z",
+      "bodyText": "PR #2742 — Round 4\nPT-4435: Show a visible connection-lost state when the socket dies\nHead reviewed: dbf262cf755 · 2026-09-08\nVerdict: 2 blocking, 3 warnings.\nTwo notes first, neither your fault:\n\nYou're right that W6 and W11 never reached you — round 3's posted summary skipped both. W6 is\nbelow; W11 (the autodocs page renders two modal Radix dialogs into one iframe, giving an\nunscrollable untabbable docs page) is real but pre-existing in shape —\nfirst-run-overlay.stories.tsx:21 already does the same on main — so it can go to the\nfollow-up.\nEverything you claimed to fix, held up under mutation. W2, W3, W5, W8, W12, W13, the\ntailwind-merge collapse, the artifact sync (papi.d.ts is +45/−0, so nothing main carried was\ndropped; dist/ export set 269 → 270, zero removed) and the localization test's falsifiability\nwere all verified mechanically, not taken on trust. The findings below are new or were never\ndelivered.\n\n\nBlocking\n1. The main merge silently broke the feature on a refused startup connection\nsrc/client/services/rpc-client.ts:380-435\nThe dbf262cf merge brought in #2737, which rewrote the same two files this PR touches. Git\nauto-merged them textually, not semantically:\n\n#2737 added failConnectionAttempt(...) to onError (rpc-client.ts:388).\nAsyncVariable.rejectWithReason calls its rejecter synchronously (async-variable.ts:105).\nSo await this.connectionComplete.promise in connect() resumes on the microtask right after\nthe error task — before the browser dispatches close.\nconnect()'s catch runs removeEventListenersFromWebSocket() (rpc-client.ts:222).\nonWebSocketClose never runs. The emitter never fires.\n\n\n\n\nStartup shape\nResult\n\n\n\n\nConnection refused (error then close) — the exact #2737 incident\nSilent. No overlay; app renders with raw localize keys and no data.\n\n\nTCP accepted, dropped before the websocket upgrade (close, no error)\nOverlay shows\n\n\n\nThis worked before the merge: onError only logged, so connect() stayed parked on the 10s\ntimeout and close arrived first. The feature is now non-deterministic at startup, decided by\nwhether an error happened to precede the close, and neither branch has a test.\nFix — pick one and pin it. rpc.interface.ts:147-164 says the event fires when this process\n\"loses\" its connection, and you can't lose one you never had. Gating the emit on\nconnectionStatus === ConnectionStatus.Connected makes both shapes agree on silent and matches\nthat contract — startup failure then stays invisible, but that's #2737's territory and\nPT-4494/PT-4495 own it. Covering the never-connected case instead means moving the emit out of the\nerror/close race.\n2. B1 reopened — the banner still fails AA in both light themes\nsrc/renderer/components/overlays/overlay-connection-lost.component.tsx:225\nThe --diff-deleted swap is correctly wired and does fix both dark themes. The measurement was\nagainst --background, but the banner's real ground is that composited with tw:bg-destructive/10\n— a tint costing ~0.6:1, which is exactly the margin. Title is 14px font-medium, description\n14px, so both need 4.5:1.\n\n\n\nTheme\nTitle\nDescription /90\n\n\n\n\nPlatform light\n4.18 FAIL\n3.99 FAIL\n\n\nparatext-light\n3.99 FAIL\n3.81 FAIL\n\n\nPlatform dark\n6.74 pass\n5.62 pass\n\n\nparatext-dark\n6.10 pass\n5.17 pass\n\n\n\nTwo independent computations agree to within 0.01. Note paratext-light is unchanged at 3.99 /\n3.81 — it was already red-600 via --destructive, so the fix did nothing there.\nTwo options: drop tw:bg-destructive/10 (the wrapper already has an opaque bg-background;\nborder + icon still carry the tone) — clears AA everywhere at 4.52 worst case, no token change, no\nUX sign-off; or darken light-theme --diff-deleted to red-700 — 5.64 / 5.37, real headroom, but\nit's a theme-token change and index.css's header requires UX approval. Either way, the in-code\ncomment claiming \"clears AA in all four\" needs correcting.\n\nWarnings\n3. index.startup-order.test.ts is a false green\nsrc/renderer/index.startup-order.test.ts:21-27\nindexOf('initConnectionLostService()') matches inside comments. Demonstrated by mutation:\n// initConnectionLostService(); // moved into a React effect in app.component.tsx\nThe substring stays at the same early offset, so both assertions hold. The feature is fully\nunwired from renderer startup and all 59 tests across the PR's 11 files pass — including the test\nnominated as the pin for this exact constraint. A clean rename does fail it, but a commented-out\nline or a breadcrumb comment is at least as likely a refactor artifact.\nFix — anchor to a statement and prove there's exactly one (^ at column 0 also pins module\nscope, which is the real constraint):\nconst calls = source.match(/^initConnectionLostService\\(\\);$/gm) ?? [];\nexpect(calls).toHaveLength(1);\n4. The overlay-host late-open test can silently become vacuous\nsrc/renderer/components/overlay-host.component.test.tsx:82-93\nYou correctly rewrote it to drive the host's own store listener — but the listener is captured into\nnotifyOverlaysChanged and invoked as notifyOverlaysChanged?.(), and nothing asserts it was ever\ncaptured. Demonstrated: delete subscribe(syncOverlays) from the effect and all three tests stay\ngreen. The connected-case test doesn't catch it because it's served by the effect's initial\nsyncOverlays(), not the subscription. (The sibling first-run suite isn't exposed this way — it has\na positive control for its read path.)\nFix: expect(notifyOverlaysChanged).toBeDefined(); before the act() and drop the ?. — or\ndrive the connected case through the same seam.\n5. W6 (never delivered) — and the {@link} it leans on is dead in the published output\nsrc/shared/services/network.service.ts:147-156 → lib/papi-dts/papi.d.ts:2769-2778\nonDidDisconnectClient (127-145) carries both the \"not part of the @papi/* surface\" note and the\nfull never-fires-elsewhere explanation. onDidLoseConnection (147-155) carries neither — it\ncompresses to \"Local to this process\" and defers to a {@link}.\nThat link doesn't resolve. The generated declare module 'shared/services/network.service' imports\nRpcClientDisconnectEvent but not IRpcMethodRegistrar, because the source only uses that type in\nthe non-exported let jsonRpc (network.service.ts:119), so the dts bundler drops it. On the\npublic papi-dts site the event's sole explanation renders as literal unlinked text.\nA main-process subscriber reads the declaration they actually import, sees \"Fires when this\nprocess's own connection to the network is lost unexpectedly\", subscribes, and gets an event that\ncan never fire there. Fix: inline the two sentences from rpc.interface.ts:150-157 — closes\nboth halves.\n\nDeferred to the follow-up\nNot worth another round: the ADR says three sites carry TODO(main-renderer-shutdown-relay) but\ngrep finds two (the extension-host case has no marker — worth fixing before merge since\ngrep-ability is the whole argument for the slug); three test names still assert the quit case W1\nestablished the latch never reaches; the PR body's embedded summary block still asks the reviewer\nto sign off on the withdrawn AlertAction export; and the three .fails tests should say \"when\nreconnect lands\" rather than \"when PT-4435 lands\".\n\n@katherinejensen00 reviewed 22 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABM2GuNg",
+      "author": "jolierabideau",
+      "state": "COMMENTED",
+      "submittedAt": "2026-09-09T16:17:00Z",
+      "bodyText": "Round 4 addressed at 85fb507b93a. Full detail in this comment; summary here so the review thread carries it.\nBoth blocking findings fixed, each verified before changing anything:\n\n#1, the startup emit race — confirmed. AsyncVariable.rejectWithReason calls its rejecter synchronously (async-variable.ts:105), so on a refused connection connect()'s catch resumes on the microtask before the browser dispatches close and strips the listeners; onWebSocketClose never ran. Took your first option: the emit is gated on connectionStatus === Connected, which is what onDidLoseConnection already promised. Both startup shapes are pinned, and the gate is falsifiable — replacing it with if (true) turns exactly those two tests red.\n#2, B1 reopened — confirmed. I recomputed the contrast table from the oklch tokens and reproduced your numbers to within 0.01, including that paratext-light was unchanged at 3.99 / 3.81 because its --diff-deleted and --destructive are the same red-600. Dropped tw:bg-destructive/10; worst case across all four themes is 4.52. Verified with the repo's own extendTailwindMerge({prefix:'tw'}) that the override actually collapses the variant's bg-card.\n\nAll three warnings fixed, each by first reproducing your mutation: the startup-order pin is now a column-0 whole-statement match requiring exactly one hit (the commented-out call now fails it); the overlay-host late-open case requires the captured store listener (deleting subscribe now fails it); and network.service's onDidLoseConnection has the two sentences inlined, since IRpcMethodRegistrar is genuinely dropped from that generated module.\nDeferred list done: the third TODO(main-renderer-shutdown-relay) site now exists in network.service.ts beside the relay that would carry it, so grep finds the three the ADR claims; the quit-case test prose is corrected in both files; the .fails cases say \"when reconnect lands\"; and the body's AlertAction sign-off ask is gone along with the two other stale mentions. W11 goes to the follow-up, per your call.\nTwo things I did not do, deliberately:\n\nDarkening light-theme --diff-deleted to red-700 is the better fix — 5.64 / 5.37 is headroom where 4.52 is a 0.02 pass. I left it because index.css requires UX approval for a token change and this state shouldn't wait on one; it's recorded in the ADR and at the call site as the not-taken option. Your call whether to pull it in.\nCovering the never-connected case. The gate means a refused startup stays silent — PT-4494 / PT-4495's territory on your own read, and a reload button is not the answer to a server that was never there. The other half of your fork is a bigger change than a gate; say so if you want it here.\n\nmain sync: MERGEABLE, 0 behind. Conflicts were only the dist/ bundles, resolved by rebuild — checked two ways: the rebuilt bundle keeps all 278 exports main carried and adds only Z_INDEX_CONNECTION_LOST, and Architecture-Decisions.md auto-merged to 72 entries, no duplicate slugs, in byte order.\nVerification: typecheck clean, lint 0 errors, 3,739 tests pass. One failure, electron-builder-snap-config.test.ts (expects gnome-42-2204, finds gnome-3-28-1804) — pre-existing on main, confirmed by checking origin/main out and running it there; this branch touches no .erb file.\nStill yours: the 16 round-3 suggestions have never reached me (round 4 didn't carry them either) — post them and I'll do one pass; the token darkening above; fresh screenshots (browser-only); the follow-up ticket the TODO slugs wait on; and the \"Reload anyway\" dismissal-path UX call.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABNA3K2g",
+      "author": "katherinejensen00",
+      "state": "COMMENTED",
+      "submittedAt": "2026-09-10T14:20:41Z",
+      "bodyText": "Just one blocker introduced by my tour changes. Feel free to push back on it as out of scope. I am approving just in case you want to put this into its own work item.\n\nReal blocker — the onboarding tour isn't stood down. tour.component.tsx:414, window-capture Escape → stopPropagation() + onSkip() → writeTourDone() → a localStorage flag that survives the reload. Press Esc at the connection-lost banner and you permanently lose an onboarding tour you never saw. That's irreversible user-visible state loss, triggered by the most obvious key to press, in the exact scenario this feature exists to handle — and the PR's own new catalog entry asserts \"Escape is inert while it is shown.\" I confirmed the whole chain at source. Same gap also makes Tab a dead key (:441). Fix is the one-liner already used twice in this PR.\n\n\n@katherinejensen00 partially reviewed 40 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABNA3TqA",
+      "author": "katherinejensen00",
+      "state": "APPROVED",
+      "submittedAt": "2026-09-10T14:20:54Z",
+      "bodyText": "@katherinejensen00 made 1 comment.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).",
+      "lastEditedAt": null
+    }
+  ],
+  "comments": [
+    {
+      "author": "jolierabideau",
+      "createdAt": "2026-09-04T17:53:40Z"
+    },
+    {
+      "author": "jolierabideau",
+      "createdAt": "2026-09-08T17:38:10Z"
+    },
+    {
+      "author": "jolierabideau",
+      "createdAt": "2026-09-09T16:12:44Z"
+    }
+  ],
+  "commits": [
+    {
+      "oid": "49c7a30cd7c7e7146f3d3628af237129f71bf157",
+      "committedDate": "2026-09-04T16:58:54Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "feat: announce when a client loses its own network connection",
+      "parentCount": 1
+    },
+    {
+      "oid": "700517248e9ce5b4b47eaed1dc7df354f1f4e422",
+      "committedDate": "2026-09-04T16:58:54Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "feat: relay connection-lost through the network service",
+      "parentCount": 1
+    },
+    {
+      "oid": "9fa5a1b343f7c34d517f7bc8978be80312fc4736",
+      "committedDate": "2026-09-04T16:58:54Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: keep onDidLoseConnection tests scoped, use named Unsubscriber type",
+      "parentCount": 1
+    },
+    {
+      "oid": "489d42ea717feacef9eeacb867b46fbcde1a9bf1",
+      "committedDate": "2026-09-04T16:58:54Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "feat: latch lost connection state in a renderer store",
+      "parentCount": 1
+    },
+    {
+      "oid": "ee1e2617ff6530d8870615363d7b1785857e4b43",
+      "committedDate": "2026-09-04T16:58:54Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "feat: add Z_INDEX_CONNECTION_LOST above every other layer",
+      "parentCount": 1
+    },
+    {
+      "oid": "1560ce888e221638fd09525aebe383d30b47cc07",
+      "committedDate": "2026-09-04T16:58:55Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "feat: add the connection-lost banner and scrim",
+      "parentCount": 1
+    },
+    {
+      "oid": "b8c429035ef96e368f43bc68d8953cb11ebc9724",
+      "committedDate": "2026-09-04T16:58:55Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "feat: show the connection-lost state when the socket dies",
+      "parentCount": 1
+    },
+    {
+      "oid": "603305360fea9c795291bd8a030ccc5c8f886f06",
+      "committedDate": "2026-09-04T16:58:55Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "chore: regenerate papi.d.ts for onDidLoseConnection",
+      "parentCount": 1
+    },
+    {
+      "oid": "9ba1fabcec7e392cc236be582257f35a4ac95a11",
+      "committedDate": "2026-09-04T16:58:55Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "test: fix non-falsifiable connection-lost coverage",
+      "parentCount": 1
+    },
+    {
+      "oid": "2404c234d44cc4a00ed3b2402438ae930d797364",
+      "committedDate": "2026-09-04T16:58:55Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "test: pin connection-lost localization keys against en.json",
+      "parentCount": 1
+    },
+    {
+      "oid": "993b22ee8a35ab253f21dd38ff5143a0226dba05",
+      "committedDate": "2026-09-04T16:59:27Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "docs: record that the connection-lost state is renderer-local",
+      "parentCount": 1
+    },
+    {
+      "oid": "751c3ef7bc653b3729f1f41cb0a909eec58ce33f",
+      "committedDate": "2026-09-04T16:59:27Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "docs: fix double-fire guard citation in connection-lost ADR",
+      "parentCount": 1
+    },
+    {
+      "oid": "94027868c0b7c8baedbf6154f7f9c074c64baa12",
+      "committedDate": "2026-09-04T16:59:28Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: make the connection-lost banner opaque",
+      "parentCount": 1
+    },
+    {
+      "oid": "d4280e81e50f8f1c03c370c8c600dadab254a89f",
+      "committedDate": "2026-09-04T16:59:28Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-4435: close keyboard and localization gaps in connection-lost state",
+      "parentCount": 1
+    },
+    {
+      "oid": "83fe2ab7e3bbeea656de1fc76e4d111f0da856cd",
+      "committedDate": "2026-09-04T16:59:28Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: address review findings on the connection-lost state",
+      "parentCount": 1
+    },
+    {
+      "oid": "3f58d6ec495bc428a154fa813aec9f07fef9cd9b",
+      "committedDate": "2026-09-04T17:46:51Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: address the second review pass on the connection-lost state",
+      "parentCount": 1
+    },
+    {
+      "oid": "8ff695c54ace124c7605a74ffa6eae7430cea848",
+      "committedDate": "2026-09-08T15:47:50Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4435-visible-conne…",
+      "parentCount": 2
+    },
+    {
+      "oid": "ed609fde260cdf860e7bd657a6b21f1ea73e6461",
+      "committedDate": "2026-09-08T17:26:01Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-4435: Fix banner contrast and close the round-3 review findings",
+      "parentCount": 1
+    },
+    {
+      "oid": "f4c6472aae8ebb54349664349c26f98eeeee6689",
+      "committedDate": "2026-09-08T17:30:25Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4435-visible-conne…",
+      "parentCount": 2
+    },
+    {
+      "oid": "4e409ac301c778c5d04587f212961b620f69f641",
+      "committedDate": "2026-09-08T17:39:52Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4435-visible-conne…",
+      "parentCount": 2
+    },
+    {
+      "oid": "dbf262cf755bb739b054252ea107a6169772e469",
+      "committedDate": "2026-09-08T19:59:02Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4435-visible-conne…",
+      "parentCount": 2
+    },
+    {
+      "oid": "3123a8b16a5773e2137b695d9c9f93a6b53f33aa",
+      "committedDate": "2026-09-09T16:03:02Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-4435: Fix the startup emit race and banner contrast from round 4",
+      "parentCount": 1
+    },
+    {
+      "oid": "85fb507b93a344b62c8e7e9b082c5e961b643058",
+      "committedDate": "2026-09-09T16:05:50Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4435-visible-conne…",
+      "parentCount": 2
+    },
+    {
+      "oid": "3f4aa5fd70967c6aaa7713dfbc3bd40e4618fdb7",
+      "committedDate": "2026-09-10T16:19:10Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4435-visible-conne…",
+      "parentCount": 2
+    }
+  ],
+  "threads": [],
+  "checks": [
+    {
+      "name": "Analyze (csharp)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on windows-latest, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Analyze (javascript)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on macos-15, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on ubuntu-22.04, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "code-review/reviewable",
+      "status": "COMPLETED",
+      "conclusion": "PENDING"
+    },
+    {
+      "name": "CodeQL",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    }
+  ]
+}

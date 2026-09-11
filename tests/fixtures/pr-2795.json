@@ -1,0 +1,158 @@
+{
+  "number": 2795,
+  "title": "PT-3609: Match Find phrases copied across a rendered line break",
+  "url": "https://github.com/paranext/paranext-core/pull/2795",
+  "isDraft": false,
+  "headOid": "02db1998a1b3adbc4612024d0912b7b4ac987cd5",
+  "mergeable": "UNKNOWN",
+  "mergeStateStatus": "UNKNOWN",
+  "reviews": [],
+  "comments": [],
+  "commits": [
+    {
+      "oid": "9a7b910a3822d46faa2846d290d2b0496906e6e4",
+      "committedDate": "2026-09-09T16:58:54Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Add design spec for Find block-boundary whitespace tolerance",
+      "parentCount": 1
+    },
+    {
+      "oid": "76191e8fa5faea26492da38c5ad49d2635b80f43",
+      "committedDate": "2026-09-09T17:31:16Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Correct the Find boundary-whitespace spec after adversarial …",
+      "parentCount": 1
+    },
+    {
+      "oid": "2602595b9ccd9313ca5fbcf89daf28a9b53125b1",
+      "committedDate": "2026-09-09T17:39:31Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Add implementation plan for Find block-boundary whitespace",
+      "parentCount": 1
+    },
+    {
+      "oid": "3c9fdae13100e8aa29fff4a79430a0db7b4a5b1a",
+      "committedDate": "2026-09-09T17:51:38Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Allow a whitespace gap at block boundaries in USJ search",
+      "parentCount": 1
+    },
+    {
+      "oid": "2635c884bd8856bd4176f5f8fdbb3a7d9cdb5820",
+      "committedDate": "2026-09-09T17:58:08Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Restructure search() exec loop to avoid no-continue suppress…",
+      "parentCount": 1
+    },
+    {
+      "oid": "6a0c9467f94122db224bc8f66c3ed0882b61a4fb",
+      "committedDate": "2026-09-09T18:06:40Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Compile interior whitespace runs as named optional groups",
+      "parentCount": 1
+    },
+    {
+      "oid": "2eb04eff1088aa5cd19c47b9c701a807a9443c18",
+      "committedDate": "2026-09-09T18:11:36Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Rebuild platform-bible-utils dist and harden group-name asse…",
+      "parentCount": 1
+    },
+    {
+      "oid": "cd3adb3742338c75859f99f9dd84a6fe3ef12ba6",
+      "committedDate": "2026-09-09T18:20:00Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Fix leading-run misclassification after a skipped diacritic",
+      "parentCount": 1
+    },
+    {
+      "oid": "d15a001d9fda0637a71d44318aff9ce7f348f260",
+      "committedDate": "2026-09-09T18:30:58Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Enable block-boundary whitespace tolerance for plain Find se…",
+      "parentCount": 1
+    },
+    {
+      "oid": "d982ff29a72f2bb6a81c40201c73f6e65789f58c",
+      "committedDate": "2026-09-09T19:05:41Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Record the boundary-whitespace decision and cover the Replac…",
+      "parentCount": 1
+    },
+    {
+      "oid": "5d82c0e986016a9c150ee91afca98a9538d15d75",
+      "committedDate": "2026-09-09T19:15:30Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Fix round-1 review findings on the boundary-whitespace spec/…",
+      "parentCount": 1
+    },
+    {
+      "oid": "a029b718331c6c3cf39defe41a16882d0a559e2e",
+      "committedDate": "2026-09-09T19:55:05Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Fix wave over final whole-branch review findings",
+      "parentCount": 1
+    },
+    {
+      "oid": "88cff2ec1e3cbe14eedd63cbf0d55da080a960e2",
+      "committedDate": "2026-09-09T20:10:41Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "PT-3609: Fix broken negative control in finding 4 (in to -> Bartholom…",
+      "parentCount": 1
+    },
+    {
+      "oid": "02db1998a1b3adbc4612024d0912b7b4ac987cd5",
+      "committedDate": "2026-09-10T12:39:08Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-3609-unexpected-fi…",
+      "parentCount": 2
+    }
+  ],
+  "threads": [],
+  "checks": [
+    {
+      "name": "Build on windows-latest, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "CANCELLED"
+    },
+    {
+      "name": "Analyze (csharp)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Analyze (javascript)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on macos-15, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on ubuntu-22.04, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "CANCELLED"
+    },
+    {
+      "name": "CodeQL",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "number": 2635,
+  "title": "`isCharacterMarker` helper and character-marker item generator",
+  "url": "https://github.com/paranext/paranext-core/pull/2635",
+  "isDraft": false,
+  "headOid": "766ae18b96c88c9ceb50da7b33f1a8a373e8398b",
+  "mergeable": "UNKNOWN",
+  "mergeStateStatus": "UNKNOWN",
+  "reviews": [
+    {
+      "id": "PRR_kwDOIyvJf88AAAABIXm9HQ",
+      "author": "katherinejensen00",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-08-04T16:10:51Z",
+      "bodyText": "Thank you for adding better character level support, Jolie! Also, Claude was impressed by your testing. It said, \"the code is sound and unusually well-tested\". Great work!\n\n@katherinejensen00 reviewed 15 files and all commit messages, and made 9 comments.\nReviewable status: all files reviewed, 8 unresolved discussions (waiting on jolierabideau).\n\n\nextensions/src/platform-scripture-editor/src/character-marker-menu.utils.ts line 102 at r1 (raw file):\n\n      : undefined;\n\n  const markerMenuItems: MarkerMenuItem[] = [];\n\n[Low] Simplify the item build and the sort.\nThe const markerMenuItems = [] + Object.values(...).forEach(push(...)) is a flatMap: Object.values(markerDetails.children).flatMap(markers => markers.filter(isCharacterMarker).map((marker): MarkerMenuItem => …)). And at line 130 the comparator's ?? a.title is dead — every generated item has a marker and the remove row is prepended after sorting — so a.marker.localeCompare(b.marker) is both simpler and truer to the invariant.\n\nextensions/src/platform-scripture-editor/src/character-marker-menu.utils.ts line 123 at r1 (raw file):\n\n              if (currentCharacterMarker && changeCharacterMarker)\n                changeCharacterMarker(currentCharacterMarker, marker);\n              else editorRef.current?.insertMarker(marker);\n\n[Medium] Please verify that \"add instead of change\" can't nest character markers.\nWhen a marker is applied but changeCharacterMarker isn't wired, picking a different marker falls through to insertMarker, inserting a second character marker over an existing span. It's unreachable today (nothing passes currentCharacterMarker), and I couldn't inspect @eten-tech-foundation/platform-editor to see whether insertMarker nests, replaces, or rejects here. Worth confirming against the editor before PT-XXX-D passes a real currentCharacterMarker, since nested/overlapping character markers are invalid in some USFM consumers.\n\nextensions/src/platform-scripture-editor/src/localized-strings.test.ts line 15 at r1 (raw file):\n\n  // JSON.parse returns `any`; asserting the known shape of localized strings contribution files\n  // eslint-disable-next-line no-type-assertion/no-type-assertion\n  const stringsFile = JSON.parse(readFileSync(stringsFilePath, 'utf-8')) as LocalizedStringsFile;\n\n[Low] You can drop this eslint-disable entirely.\nJSON.parse returns any, which assigns to a typed target without a cast, so const stringsFile: LocalizedStringsFile = JSON.parse(readFileSync(...), 'utf-8') satisfies the type with no as and no suppression — which is what the eslint-disable-discipline rule prefers.\n\nextensions/src/platform-scripture-editor/src/localized-strings.test.ts line 43 at r1 (raw file):\n\n      const es = localizedStrings.es[key];\n      expect(es.charAt(0)).toMatch(/[A-ZÁÉÍÓÚÜÑ]/);\n      expect(es.slice(1)).toBe(es.slice(1).toLowerCase());\n\n[Low] This sentence-case check will reject correct future translations and can throw instead of failing cleanly.\nes.slice(1) === es.slice(1).toLowerCase() forbids any non-initial capital, so a future key whose Spanish legitimately contains a proper noun or an acronym (e.g. USFM) fails a correct translation. Related: charAt(0) won't match a Spanish opening ¿/¡; a missing es value makes es.charAt(0) throw a TypeError rather than report the missing string; and it uses toLowerCase not toLocaleLowerCase. It's copied from legacy-comment-manager, so this is really a shared-pattern gap — worth loosening (or extracting) before more keys ride on it.\n\nextensions/src/platform-scripture-editor/src/character-marker-menu.utils.ts line 137 at r1 (raw file):\n\n  // menu's search box is empty: the row has no marker code to match on, so a search can only match\n  // its title, and `MarkerMenu` renders title matches after every code match.\n  if (!currentCharacterMarker || !removeCharacterMarker) return sortedMarkerMenuItems;\n\n**[Medium] The menu can return a \"remove only\" list, which contradicts the documented @returns.\nThe @returns says the result is [] when the parent \"contributes no character markers.\" But for the 14 parents whose children are all non-character (mt, qs, cp, h, h1–h3, ide, b, mte1, ms3, mt1–mt3), the childless early-return is bypassed, the filter yields [], and if a marker is applied with removeCharacterMarker supplied you get [removeRow] — a menu that offers only \"Remove\" and nothing to add. It's latent (needs the remove op), but before PT-XXX-D either return [] when there are no character children, or update the doc to describe the remove-only case.\n\nextensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts line 34 at r1 (raw file):\n\nimport { ScriptureRange } from 'platform-scripture-editor';\nimport type { SharedProjectsInfo } from 'platform-scripture';\nimport { MutableRefObject } from 'react';\n\n[Low] One-line hardening for the import boundary: make these import type.\nMutableRefObject, EditorRef, and MarkerMenuItem are bare value imports used only in type positions — safe today only because the compiler elides them. Switching to import type { … } makes the erasure structural: a future value-use becomes a compile error at the import line instead of a silent runtime require('react'). Given this is the file whose header warns about exactly this, it's a fitting place to practice it.\n\nextensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts line 1 at r1 (raw file):\n\n/*\n\n[Medium] The extension-host import boundary is documented but not enforced — and it's a hard-fail.\nThe header is accurate: a value import of a UI module into this host-reachable file crashes activation. I confirmed the exact mechanism — lucide-react/platform-bible-react aren't webpack-externalized, so they're bundled, but they call forwardRef/createContext at module-eval, which transitively emits require('react'); react is externalized and isn't on the host shim's allowlist (extension.service.ts:1328-1354), so it throws \"Requiring other than papi is not allowed\" and no editor opens. The whole safety net is prose, and PT-XXX-D..G will keep adding UI to this extension. Consider a no-restricted-imports rule (or an import-graph vitest test over main.ts's transitive deps) so this fails in CI instead of at runtime. The cheapest first step is #6 below.\n\nlib/platform-bible-react/src/stories/advanced/marker-menu.stories.tsx line 12 at r1 (raw file):\n\n  title: 'Advanced/MarkerMenu',\n  component: MarkerMenu,\n  tags: ['autodocs'],\n\n[Low] The PR description's coverage caveat is inverted — the story's play does run.\nThe write-up says the play \"is not exercised by vitest\" because the meta lacks 'test'. But .storybook/preview.ts sets a global tags: ['autodocs','test'], Storybook merges tags additively (you remove one with '!test'), and vitest.config.ts includes 'test' — so this story's play and the DisallowedMarker precedent's both execute. Good news for coverage; just worth correcting the note so the assumption doesn't propagate.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABIYuB0A",
+      "author": "jolierabideau",
+      "state": "COMMENTED",
+      "submittedAt": "2026-08-04T18:34:51Z",
+      "bodyText": "Thank you!\n\n@jolierabideau made 2 comments and resolved 7 discussions.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on katherinejensen00).\n\n\nextensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts line 1 at r1 (raw file):\nPreviously, katherinejensen00 wrote…\n[Medium] The extension-host import boundary is documented but not enforced — and it's a hard-fail.\nThe header is accurate: a value import of a UI module into this host-reachable file crashes activation. I confirmed the exact mechanism — lucide-react/platform-bible-react aren't webpack-externalized, so they're bundled, but they call forwardRef/createContext at module-eval, which transitively emits require('react'); react is externalized and isn't on the host shim's allowlist (extension.service.ts:1328-1354), so it throws \"Requiring other than papi is not allowed\" and no editor opens. The whole safety net is prose, and PT-XXX-D..G will keep adding UI to this extension. Consider a no-restricted-imports rule (or an import-graph vitest test over main.ts's transitive deps) so this fails in CI instead of at runtime. The cheapest first step is #6 below.\n\nDone.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABIgmZAA",
+      "author": "katherinejensen00",
+      "state": "APPROVED",
+      "submittedAt": "2026-08-05T15:25:11Z",
+      "bodyText": "@katherinejensen00 reviewed 5 files and all commit messages, and resolved 1 discussion.\nReviewable status:  complete! all files reviewed, all discussions resolved.",
+      "lastEditedAt": null
+    }
+  ],
+  "comments": [],
+  "commits": [
+    {
+      "oid": "65f05890b215782954dc6fe9c1d920c06c76fe4d",
+      "committedDate": "2026-07-30T18:17:59Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Add isCharacterMarker to PBU",
+      "parentCount": 1
+    },
+    {
+      "oid": "3ec069702f7228a104b74ebd0e8723211db7aebd",
+      "committedDate": "2026-07-30T19:16:40Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "platform-bible-utils: document isCharacterMarker's exclusions and for…",
+      "parentCount": 1
+    },
+    {
+      "oid": "a796ed956c14205ffd97658a97183ce869c4440e",
+      "committedDate": "2026-07-30T19:16:56Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Add generateCharacterMarkerMenuListItems for the character-marker menu",
+      "parentCount": 1
+    },
+    {
+      "oid": "fc1c09fb67f922862143477ccafb013238114c7e",
+      "committedDate": "2026-07-30T19:17:08Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Add the character-marker menu's remove-row label, in en and es",
+      "parentCount": 1
+    },
+    {
+      "oid": "c248381dc50606d03a19e4c19168c9c199ac0358",
+      "committedDate": "2026-08-03T12:41:19Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Move character-marker menu generator out of the extension-host graph",
+      "parentCount": 1
+    },
+    {
+      "oid": "7016064aabe1826c51e5248e16df30e18193ef0f",
+      "committedDate": "2026-08-04T14:24:36Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Address review findings on the character-marker helper and generator",
+      "parentCount": 1
+    },
+    {
+      "oid": "1633e06bc67c7b6951db220995180f58ebc42e24",
+      "committedDate": "2026-08-04T14:25:32Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge branch 'main' of github.com:paranext/paranext-core into is-char…",
+      "parentCount": 2
+    },
+    {
+      "oid": "766ae18b96c88c9ceb50da7b33f1a8a373e8398b",
+      "committedDate": "2026-08-04T18:34:33Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Stop marker picks from nesting, and enforce the host import boundary",
+      "parentCount": 1
+    }
+  ],
+  "threads": [],
+  "checks": [
+    {
+      "name": "Analyze (csharp)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on windows-latest, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Analyze (javascript)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on macos-15, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on ubuntu-22.04, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "CodeQL",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "code-review/reviewable",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    }
+  ]
+}

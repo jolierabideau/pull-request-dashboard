@@ -1,0 +1,129 @@
+{
+  "number": 2717,
+  "title": "PT-4403: Cover empty-chapter localize keys, announce the zero state",
+  "url": "https://github.com/paranext/paranext-core/pull/2717",
+  "isDraft": false,
+  "headOid": "46c3ca6067070928972b718c28e1e68c78265c0c",
+  "mergeable": "UNKNOWN",
+  "mergeStateStatus": "UNKNOWN",
+  "reviews": [
+    {
+      "id": "PRR_kwDOIyvJf88AAAABMQoOcg",
+      "author": "katherinejensen00",
+      "state": "CHANGES_REQUESTED",
+      "submittedAt": "2026-09-04T20:50:55Z",
+      "bodyText": "Review of PR #2717 — Cover empty-chapter localize keys in en/es parity tests\n\nPR: #2717\nAuthor: jolierabideau\nBranch: pt-4403-blank-chapter-cleanup → main\nHead reviewed: 65c981d86ab\nSize: 4 files, +97 / −21\nReviewed: 2026-09-04\n\nTo the PR author: The extraction itself is clean and the parity gap you found is real —\nLocalization-Guide.md:492 lists en/es key gaps as a blocking issue, and this is the repo's first\nmechanical enforcement of that rule, which is a genuinely good contribution. But the new whole-file\nguard has one blocking defect: it makes the test file fail silently and totally in the exact\nscenario it was written to catch. Separately, the new .const.ts module's stated reason for\nexisting does not reproduce, and three of the six added strings are user-visible data changes riding\nunder a test-shaped title.\nFindings confirmed by running code are marked [verified].\nPaths are relative to the repo root; the prefix extensions/src/platform-scripture-editor/ is\nabbreviated as …/ after its first use.\n\nBlocking\n1. extensions/src/platform-scripture-editor/src/localized-strings.test.ts:296 — Severity: High (blocking)\nSummary: A missing or renamed es block now wipes out all 181 tests in this file instead of\nfailing them, so the guard destroys the file's coverage at the exact moment it is supposed to fire.\nThe two Object.keys() calls sit in the describe callback, which runs during collection, not\ninside an it. A throw there aborts the whole file. [verified] — renaming the JSON's \"es\"\nblock to \"es-419\":\n\n\n\n\nbase (main)\nPR head\n\n\n\n\nresult\n110 failed / 57 passed (167) — file collects, every test names its key\nTests: no tests — 0 of 181 collected, bare TypeError: Cannot convert undefined or null to object at :297:25\n\n\n\nThe hazard is new to this PR: at base, every localizedStrings.en/.es read is inside an it body.\nTrigger is a one-word edit in a 38 KB JSON (locale retirement, regional-variant rename, bad merge).\nFix: move both Object.keys reads inside the it bodies.\n\nImportant\n2. …/src/empty-chapter-view.const.ts:5 — Severity: Medium-High\nSummary: The new module's sole stated justification — that a node-environment test cannot\nimport the component — is false, and it has now been copy-pasted into a third file.\nThe header says importing the component \"would drag in platform-bible-react, which touches\ndocument at module load.\" [verified] — pointing the test's import at\n./empty-chapter-view.component: 181/181 pass. extensions/vitest.config.ts is a single\nenvironment: 'node' with no jsdom override and no platform-bible-react alias, so there is no\nhidden rescue. Further, 66 test files under extensions/src (45 in this extension) use\n// @vitest-environment jsdom, and book-not-available-view.component.test.tsx:1,6 uses that\npragma and imports its component directly.\nThere is a real cost (collect time 0.52s → 2.46s), which is a fine reason to keep the split —\nbut it is not the reason written down. A comment asserting a false invariant is worse than none,\nbecause the next person copies it into a fourth .const.ts.\n3. …/src/localized-strings.test.ts:130 — Severity: Medium\nSummary: This PR makes the neighbouring comment factually false, and the filter it justifies now\nexcludes the very key you just translated from the only assertion that would catch a regression.\nThe comment claims \"%versionHistoryCommit_*% is en-only across the whole file.\" Your first hunk\ngives all three Spanish values. [verified] — replacing the filter with .filter(() => true)\nyields 184/184 green, so it can simply be deleted. Until then\n%versionHistoryCommit_beforeRemoveCharacterMarker% has no \"es differs from en\" coverage\nanywhere.\nThe comment's second clause — about the sync-blocked key — describes a key not in\nREMOVE_CHARACTER_MARKER_STRING_KEYS at all; that half is pre-existing.\n4. …/contributions/localizedStrings.json:241 — Severity: Medium\nSummary: The three %versionHistoryCommit_*% values are not UI chrome — they are persisted,\ncross-user project data, and translating them here leaves the repo shipping two contradictory\npolicies for one key family.\n[verified] — these flow through commitVersionHistorySnapshot\n(editor-side-effects.utils.ts:82-87) into\npapi.commands.sendCommand('paratextBibleSendReceive.commitChanges', …), i.e. a commit message\nwritten into version history and shared via Send/Receive. Meanwhile platform-scripture ships\n33 locales and its sibling keys (_beforeReplace, _beforeReplace_failureMessage,\n_afterReplace) are English-only in all 33. A Spanish translator's history then interleaves\n\"Antes de insertar nota al pie\" with \"Before doing Replace\", permanently — labels freeze at\ncommit time.\nWorth a deliberate product call, not a side effect of turning a test green.\n5. …/src/empty-chapter-view.component.tsx:56 — Severity: Medium\nSummary: The PR adds 12 tests about these four keys and zero that the component picks the\nright one — an inverted ternary passes all of them.\nNo .test.tsx and no .stories.tsx exist for this component (both siblings have both). Nothing\ncovers isResource ? MESSAGE_RESOURCE_KEY : MESSAGE_KEY. Invert it and all 12 new tests still pass,\nwhile an editable project shows \"This chapter is empty in this resource.\" beside a live\nAdd chapter number button — exactly what the two-key split exists to prevent.\nPre-existing, but the new parity tests create false confidence that the view is covered.\n\nModerate\n6. …/src/localized-strings.test.ts:295 — Severity: Medium-Low\nThe guard checks key-set parity but never that es differs from en, so pasting English into es\nsatisfies it. [verified] — setting es['%versionHistoryCommit_beforeInsertFootnote%'] to its\nEnglish value leaves 181/181 green. That is the fastest way a future developer unblocks the new\nred test. A blanket differs-check needs an allowlist ([verified] exactly 4 keys legitimately\nshare values, all placeholder-only format strings); at minimum, document the limitation beside the\nguard.\n7. …/src/localized-strings.test.ts:290 — Severity: Medium-Low\nThe guard compares locale-to-locale and never code-to-JSON, so a key referenced in code but absent\nfrom both locales is invisible — and those are precisely the keys the comment names as its\nmotivation (platform-scripture-editor.web-view.tsx:331-332, consumed at :1579/:1596). Rename\none in the JSON and the literal %versionHistoryCommit_beforeInsertFootnote% gets written into\ncollaborators' version history while the suite stays green.\n8. …/src/localized-strings.test.ts:299 — Severity: Medium-Low\nit('declares every English key in Spanish') opens with the assertion for the opposite direction\n(line 300 checks Spanish keys missing English values), and since expect throws, line 301 — the\ndirection the title describes — never runs. Split into two direction-accurate blocks.\n9. …/src/localized-strings.test.ts:276 — Severity: Medium-Low\n%webView_platformScriptureEditor_emptyChapter_messageResource% is [verified] already covered\nvia model-text-panel.const.ts:34 at :228-240. The real gap was three keys, not four. This file\nmaintains two explicit \"checked elsewhere\" mechanisms (:73-84, :134) and the new block ignores\nboth, so one broken value now fails two suites with unrelated names.\n10. …/src/localized-strings.test.ts:291 — Severity: Medium-Low\nThe rationale comment's cited example is checkably wrong:\n%versionHistoryCommit_beforeRemoveCharacterMarker% is in an exported array\n(use-remove-character-marker.hook.ts:24-27). It went uncovered because of the filter at :134,\nnot because no array exports it. Only the two beforeInsert* keys fit the described class.\n11. …/src/empty-chapter-view.const.ts:28 — Severity: Medium-Low\nNew TSDoc says the test \"iterates every exported *_STRING_KEYS array.\" It iterates nine\nhand-written imports; the extension exports fourteen. Your own comment at test:290-292 says the\nopposite. Copied verbatim from book-not-available-view.const.ts:33-34 — fix both.\n12. …/src/empty-chapter-view.component.tsx:54 — Severity: Medium-Low (accessibility, pre-existing)\nRenders a bare <div><span> with no role=\"status\", no focus target, no focus repair — unlike both\nsiblings doing the same swap (book-not-available-view.component.tsx:88-101,\nresource-message-view.component.tsx:55-70). The editor subtree gets display:none, so a\nscreen-reader user arriving at a blank chapter has focus fall to <body> with nothing announced.\nThe return path is handled; the arrival path is not, and no comment records it as deliberate.\n13. …/src/localized-strings.test.ts:296 — Severity: Low-Medium\nTitled \"across the whole contribution file\" but reads only en/es. Note: iterating all locales\nwould be wrong — platform-scripture deliberately ships 32 partial locales (3–11 keys each) and\nthe guide's fallback chain handles that by design. Fix the title, not the loop.\n14. .context/standards/Localization-Guide.md:228 — Severity: Low-Medium\nStates \"Both are required for the build to pass.\" [verified] false: no localization check in any\nnpm script or workflow, and 444 en-only keys ship today. Your own test comment (:31-32) says the\nopposite. Per CLAUDE.md's \"promote settled conventions,\" point the guide at where the guard actually\nlives.\n\nMinor / Nit\n15. …/src/empty-chapter-view.const.ts:17 — Severity: Low\nThe four keys are hand-listed twice; Object.freeze(Object.values(EMPTY_CHAPTER_VIEW_KEYS))\npreserves the literal union. Mirrors the sibling deliberately — but the sibling has a reason this\nfile lacks (its object feeds DISABLED_REASON_TOOLTIP_KEYS), and\nresource-panel-strings.utils.ts:59 already derives. Change both files or neither.\n16. …/src/localized-strings.test.ts:304 — Severity: Low\nA 380-key mutation sweep found no input where this it fails alone; it is subsumed by the first for\nevery realistic case. Collapse to one accurately-named test plus a separate non-empty-value\nassertion.\n17. …/src/localized-strings.test.ts:300 — Severity: Low\n!localizedStrings.en[key] tests truthiness where existence is meant, so an empty-string value\nmakes the two it blocks assert contradictory things about the same key. Object.hasOwn states the\nintent.\n18. …/src/localized-strings.test.ts:281 — Severity: Low\nThe whole-file guard makes 'has a Spanish label' unfalsifiable in all seven per-key blocks (56 of\n181 cases now carry no unique detection power). Note what does survive, so a later cleanup does\nnot delete the wrong half: 'has an English label' is the only code→JSON link, and\n'Spanish differs from English' the only untranslated-copy check.\n19. …/src/localized-strings.test.ts:274 — Severity: Low\nSeventh verbatim copy of the same three-assertion block (~94 lines across :36–:276). You\ndeclined a helper as a pre-existing pattern — fair, but this PR is what makes the shape obsolete\nrather than merely repetitive, so it is worth recording as a decision.\n20. …/src/localized-strings.test.ts:295 — Severity: Low (scope)\n[verified] 444 en-only keys across five extensions; this guard lands on the one file already at\n190/190. A repo-scoped test globbing extensions/src/*/contributions/localizedStrings.json with a\nshrink-only allowlist would ratchet the backlog instead of needing N copy-pastes.\n21. .context/standards/Architecture-Decisions.md (absent entry) — Severity: Low\nCLAUDE.md requires recording cross-cutting decisions. Two candidates here: the whole-file parity\nconvention (your own body calls the escape hatch undesigned) and the now-five-file .const.ts split\npattern.\n22. Commit 65c981d86ab / PR body — Severity: Low\nMissing the Session-URL: trailer and the AI-assisted — [session](url) line CLAUDE.md requires.\nMatters more than usual since the body states the implementation was authored during the review\nsession.\n23. …/src/empty-chapter-view.const.ts:2 — Severity: Nit\n{@link EmptyChapterView} cannot resolve — the symbol lives in the module this file deliberately\ndoes not import. Line 25 uses backticks for the same symbol. Identical in the sibling; fix together.\n24. …/src/empty-chapter-view.component.tsx:56 — Severity: Nit (low confidence)\nThe message renders as an unstyled <span>; book-not-available-view.component.tsx:105-107 uses\ntw:text-center tw:text-sm tw:text-muted-foreground with an explicit comment that the treatment\nshould match across surfaces.\n25. …/contributions/localizedStrings.json:282 — Severity: Nit (latent)\n\"La estructura está bloqueada. Los marcadores…\" would fail this file's own sentence-case rule\n(test:60-66) if its scope were widened, because the rule skips only word index 0 and is not\nsentence-boundary aware. Fix the rule before growing its scope, not the translation.\n26. PR title — Severity: Nit\n\"Cover empty-chapter localize keys in en/es parity tests\" understates it: three of six added values\nare new user-visible Spanish strings (see finding 4). The strings themselves are correct and\nconsistent with in-file precedent — añadir matches the exact \"No se pueden ___\" construction at\n:263/:265.\n\nVerified clean\n\nJSON hunks are pure appends with zero existing values modified (immutability rule satisfied); both\nblocks stay alphabetized at 190/190.\nThe component's export surface is effect-identical to base, render body byte-identical, no import\ncycle, no dropped export.\nLint clean on all four files; suite green at 181/181 as submitted.\n\nTwo candidate findings were refuted and dropped: the guard does not foreclose the\nmetadata.fallbackKey pattern, and the un-namespaced %versionHistoryCommit_*% family has no\ncross-extension collision (1162 distinct en keys across 10 extensions, zero defined twice).\nIf you fix only one thing, make it finding 1 — it is a two-line move, and it is the difference\nbetween a guard that reports the problem and one that hides it.\n\nReview method\nFour passes, cross-checked against each other:\n\nDeveloper / soundness pass (code quality, testing, breakage risk).\nCode-architect pass (pattern conformance, where the change belongs).\nComments-and-documentation pass (accuracy, density, forward-facing test).\nAn adversarial pass that attacked passes 1–3, followed by /code-review max with the finding cap\nraised to 16 per subagent and 30 for the final report.\n\nThe adversarial pass killed six of eleven initial findings, including one graded positive that\ninverted into finding 2. Every high-severity claim above was re-verified by executing it against the\nPR head in a scratch copy; the review worktree was restored to a clean state afterwards — no\ncommits, no changes to the PR, no comments posted.\n\n@katherinejensen00 reviewed 7 files and all commit messages, and made 2 comments.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).\n\n\nextensions/src/platform-scripture-editor/src/empty-chapter-view.const.ts line 5 at r1 (raw file):\n\n *\n * Split out of the component module so consumers that must not pull in React can import them.\n * `localized-strings.test.ts` is the one that forces this: it runs in the node environment (it only\n\n2. …/src/empty-chapter-view.const.ts:5 — Severity: Medium-High\nSummary: The new module's sole stated justification — that a node-environment test cannot\nimport the component — is false, and it has now been copy-pasted into a third file.\nThe header says importing the component \"would drag in platform-bible-react, which touches\ndocument at module load.\" [verified] — pointing the test's import at\n./empty-chapter-view.component: 181/181 pass. extensions/vitest.config.ts is a single\nenvironment: 'node' with no jsdom override and no platform-bible-react alias, so there is no\nhidden rescue. Further, 66 test files under extensions/src (45 in this extension) use\n// @vitest-environment jsdom, and book-not-available-view.component.test.tsx:1,6 uses that\npragma and imports its component directly.\nThere is a real cost (collect time 0.52s → 2.46s), which is a fine reason to keep the split —\nbut it is not the reason written down. A comment asserting a false invariant is worse than none,\nbecause the next person copies it into a fourth .const.ts.",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABMqjWfQ",
+      "author": "katherinejensen00",
+      "state": "APPROVED",
+      "submittedAt": "2026-09-08T17:19:58Z",
+      "bodyText": "Thanks for making those changes, Jolie!\n\n@katherinejensen00 reviewed 6 files and all commit messages, and made 1 comment.\nReviewable status: all files reviewed, 1 unresolved discussion (waiting on jolierabideau).",
+      "lastEditedAt": null
+    },
+    {
+      "id": "PRR_kwDOIyvJf88AAAABMqjfog",
+      "author": "katherinejensen00",
+      "state": "APPROVED",
+      "submittedAt": "2026-09-08T17:20:11Z",
+      "bodyText": "@katherinejensen00 resolved 1 discussion.\nReviewable status:  complete! all files reviewed, all discussions resolved.",
+      "lastEditedAt": null
+    }
+  ],
+  "comments": [
+    {
+      "author": "katherinejensen00",
+      "createdAt": "2026-09-08T15:56:01Z"
+    },
+    {
+      "author": "jolierabideau",
+      "createdAt": "2026-09-08T16:09:32Z"
+    },
+    {
+      "author": "jolierabideau",
+      "createdAt": "2026-09-08T16:27:52Z"
+    }
+  ],
+  "commits": [
+    {
+      "oid": "d8319f18333798c385a385a4f1d28129aa7b97d0",
+      "committedDate": "2026-09-04T20:08:21Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: cover empty-chapter localize keys in en/es parity tests",
+      "parentCount": 1
+    },
+    {
+      "oid": "3f121b5d8a922453f2fdb29f390ecf2d4c607fb0",
+      "committedDate": "2026-09-04T20:08:21Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: address review findings on empty-chapter localize coverage",
+      "parentCount": 1
+    },
+    {
+      "oid": "5320cf9e3cb390a82635a1fd4ea22aa6c760e5d2",
+      "committedDate": "2026-09-08T15:15:40Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4403-blank-chapter…",
+      "parentCount": 2
+    },
+    {
+      "oid": "dc8be09cdb54d545e2634fe5d647de2cb2b83eaf",
+      "committedDate": "2026-09-08T16:07:06Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "fix: drop the whole-file localize guard and the commit-message transl…",
+      "parentCount": 1
+    },
+    {
+      "oid": "46c3ca6067070928972b718c28e1e68c78265c0c",
+      "committedDate": "2026-09-08T16:07:17Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Merge remote-tracking branch 'origin/main' into pt-4403-blank-chapter…",
+      "parentCount": 2
+    }
+  ],
+  "threads": [],
+  "checks": [
+    {
+      "name": "Analyze (csharp)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on windows-latest, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Analyze (javascript)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on macos-15, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Build on ubuntu-22.04, .Net 8.0.x",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "CodeQL",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "code-review/reviewable",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS"
+    }
+  ]
+}

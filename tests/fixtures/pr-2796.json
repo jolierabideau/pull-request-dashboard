@@ -1,0 +1,31 @@
+{
+  "number": 2796,
+  "title": "PT-4548: Adopt the localized-key convention for ProjectSelector",
+  "url": "https://github.com/paranext/paranext-core/pull/2796",
+  "isDraft": true,
+  "headOid": "d1ceb881f902ee8cf4bd1ea473be25bd89659cde",
+  "mergeable": "CONFLICTING",
+  "mergeStateStatus": "DIRTY",
+  "reviews": [],
+  "comments": [],
+  "commits": [
+    {
+      "oid": "6a325a8475c4135ca75846d3058212e1b4bad4b2",
+      "committedDate": "2026-09-10T13:38:51Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Adopt the localized-key convention for ProjectSelector",
+      "parentCount": 1
+    },
+    {
+      "oid": "d1ceb881f902ee8cf4bd1ea473be25bd89659cde",
+      "committedDate": "2026-09-11T15:06:39Z",
+      "authorLogin": "jolierabideau",
+      "authorEmail": "jolie_rabideau@sil.org",
+      "messageHeadline": "Address review findings on the ProjectSelector localized-key adoption",
+      "parentCount": 1
+    }
+  ],
+  "threads": [],
+  "checks": []
+}
