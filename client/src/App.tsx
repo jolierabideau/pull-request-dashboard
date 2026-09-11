@@ -80,10 +80,18 @@ export function App() {
 
       {board.branches.length > 0 && (
         <details>
-          <summary>{board.branches.length} local branches</summary>
+          <summary>Local branches ({board.branches.length})</summary>
+          {/*
+            A plain list of local branches, not a claim about unsubmitted work:
+            we do not fetch headRefName, so we cannot tell which branches have
+            PRs. The only distinction we can honestly draw is a gone upstream.
+          */}
           <ul>
             {board.branches.map((b) => (
-              <li key={b.name}>{b.name} — {b.bucket}</li>
+              <li key={b.name}>
+                {b.name}
+                {b.bucket === 'dead-branch' && ' — upstream gone'}
+              </li>
             ))}
           </ul>
         </details>
