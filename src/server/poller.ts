@@ -3,7 +3,8 @@ import { checkDot } from '../rules/checks.js';
 import { resolveEscalation } from '../claude/escalate.js';
 import { fetchOpenPrs } from '../github/client.js';
 import { readBranches } from '../git/branches.js';
-import { NOTIFY_BUCKETS, notify } from '../notify/osascript.js';
+import { notifyKey } from '../rules/notify.js';
+import { notify } from '../notify/osascript.js';
 import type { Store } from '../store/db.js';
 import type {
   BranchInput, Bucket, Classification, Config, PrInput,
@@ -15,6 +16,8 @@ export interface BoardItem extends Classification {
   url: string;
   isDraft: boolean;
   checkDot: 'fail' | 'pending' | 'pass' | 'none';
+  /** Carried so the notify key can be recomputed after a verdict moves a bucket. */
+  discordPostedAt: string | null;
 }
 
 export interface BranchItem {
@@ -26,7 +29,8 @@ export interface Board {
   items: BoardItem[];
   branches: BranchItem[];
   yourCourtCount: number;
-  fetchedAt: string;
+  /** Null only on the board shell served before the first poll lands. */
+  fetchedAt: string | null;
   stale: boolean;
   error: string | null;
 }
@@ -58,6 +62,7 @@ export function buildBoard(
       url: pr.url,
       isDraft: pr.isDraft,
       checkDot: checkDot(pr.checks),
+      discordPostedAt: local.discordPostedAt,
     };
   });
 
@@ -101,13 +106,14 @@ export function createPoller(cfg: Config, store: Store): Poller {
 
     try {
       const prs = await fetchOpenPrs(cfg);
-      const prBranches = new Set(prs.map((p) => p.title));
-      const branches = readBranches(cfg.repoPath, prBranches);
+      // No branch-to-PR correlation is asserted: the GraphQL query does not
+      // fetch headRefName, so there is nothing honest to match branches on.
+      const branches = readBranches(cfg.repoPath, new Set<string>());
       const next = buildBoard(prs, branches, store, cfg, new Date());
 
       await attachVerdicts(next, prs, store);
       if (superseded()) return;
-      sendNotifications(next, store);
+      sendNotifications(next, store, cfg);
       commit(next);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -156,20 +162,32 @@ async function attachVerdicts(
     }
     item.verdict = verdict;
     item.receipts.push(`Claude: ball is in ${verdict.court === 'me' ? 'your' : 'their'} court`);
-    if (verdict.court === 'me' && item.bucket === 'ready-to-merge') {
-      item.bucket = 'needs-your-response';
+
+    // A red build or a conflict is the user's court whatever a review says.
+    if (item.bucket === 'blocked-mechanically') continue;
+
+    const from = item.bucket;
+    const to: Bucket = verdict.court === 'me' ? 'needs-your-response' : 'waiting-on-reviewer';
+    if (from !== to) {
+      item.bucket = to;
+      item.receipts.push(`Claude's verdict moved this from ${from} to ${to}`);
     }
   }
   board.items.sort((a, b) => ORDER.indexOf(a.bucket) - ORDER.indexOf(b.bucket));
   board.yourCourtCount = board.items.filter((i) => YOUR_COURT.has(i.bucket)).length;
 }
 
-function sendNotifications(board: Board, store: Store): void {
+function sendNotifications(board: Board, store: Store, cfg: Config): void {
   const now = new Date();
   for (const item of board.items) {
-    if (!NOTIFY_BUCKETS.has(item.bucket)) continue;
-    if (!store.shouldNotify(item.number, item.bucket, now)) continue;
-    notify(`PR #${item.number}`, `${item.bucket}: ${item.title}`, item.url);
-    store.recordNotified(item.number, item.bucket, now);
+    const key = notifyKey(item, cfg, now);
+    if (store.shouldNotify(item.number, key, now)) {
+      notify(`PR #${item.number}`, `${key}: ${item.title}`, item.url);
+      store.recordNotified(item.number, key, now);
+      continue;
+    }
+    // Record what we saw even when nothing fired, so leaving and re-entering
+    // a notify-worthy key notifies again.
+    store.recordObserved(item.number, key);
   }
 }

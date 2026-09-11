@@ -90,4 +90,44 @@ describe('notification dedupe', () => {
     const later = new Date('2026-09-11T12:20:00Z');
     expect(s.shouldNotify(2795, 'blocked-mechanically', later)).toBe(true);
   });
+
+  it('never notifies for a key that is not notify-worthy', () => {
+    expect(store().shouldNotify(2795, 'waiting-on-reviewer', NOW)).toBe(false);
+  });
+
+  // The round trip the product exists to catch: you notify, you reply, the
+  // reviewer comes back days later. The observed key must be recorded on
+  // every poll or the second arrival is silent forever.
+  it('notifies again after the PR leaves and re-enters a notify-worthy key', () => {
+    const s = store();
+    s.recordNotified(2795, 'needs-your-response', NOW);
+    s.recordObserved(2795, 'waiting-on-reviewer');
+
+    const friday = new Date('2026-09-15T12:00:00Z');
+    expect(s.shouldNotify(2795, 'needs-your-response', friday)).toBe(true);
+  });
+
+  it('stays quiet while the PR sits in the same key across polls', () => {
+    const s = store();
+    s.recordNotified(2795, 'needs-your-response', NOW);
+    s.recordObserved(2795, 'needs-your-response');
+
+    const friday = new Date('2026-09-15T12:00:00Z');
+    expect(s.shouldNotify(2795, 'needs-your-response', friday)).toBe(false);
+  });
+
+  // Trigger 2: the Discord clock crossing its threshold, which changes the
+  // key without changing the bucket.
+  it('notifies when a watched PR crosses the staleness threshold', () => {
+    const s = store();
+    s.recordObserved(2795, 'asked-no-looks');
+    expect(s.shouldNotify(2795, 'asked-no-looks-stale', NOW)).toBe(true);
+  });
+
+  it('only notifies once for the same staleness crossing', () => {
+    const s = store();
+    s.recordNotified(2795, 'asked-no-looks-stale', NOW);
+    const later = new Date('2026-09-11T13:00:00Z');
+    expect(s.shouldNotify(2795, 'asked-no-looks-stale', later)).toBe(false);
+  });
 });
