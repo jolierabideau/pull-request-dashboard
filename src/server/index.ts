@@ -1,0 +1,18 @@
+import Fastify from 'fastify';
+import { loadConfig } from '../config.js';
+import { openStore } from '../store/db.js';
+import { createPoller } from './poller.js';
+import { registerRoutes } from './routes.js';
+
+const config = loadConfig(process.env.PRD_CONFIG ?? 'config.json');
+const store = openStore(process.env.PRD_DB ?? 'pr-dashboard.db');
+const poller = createPoller(config, store);
+
+const app = Fastify({ logger: { level: 'warn' } });
+registerRoutes(app, poller, store);
+
+poller.start();
+
+const port = Number(process.env.PORT ?? 5174);
+await app.listen({ port, host: '127.0.0.1' });
+console.log(`PR dashboard API on http://127.0.0.1:${port}`);
