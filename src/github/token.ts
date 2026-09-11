@@ -4,14 +4,16 @@ let cached: string | null = null;
 
 export function getToken(): string {
   if (cached !== null) return cached;
+  let token: string;
   try {
-    cached = execFileSync('gh', ['auth', 'token'], { encoding: 'utf8' }).trim();
+    token = execFileSync('gh', ['auth', 'token'], { encoding: 'utf8' }).trim();
   } catch {
     throw new Error(
       'Could not read a GitHub token. Run `gh auth login` and start again.',
     );
   }
-  if (cached === '') throw new Error('`gh auth token` returned nothing.');
+  if (token === '') throw new Error('`gh auth token` returned nothing.');
+  cached = token;
   return cached;
 }
 

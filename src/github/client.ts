@@ -55,8 +55,24 @@ function mapChecks(node: GqlNode): CheckContext[] {
   return contexts.map((c: GqlNode) =>
     c.name !== undefined
       ? { name: c.name, status: c.status, conclusion: c.conclusion ?? null }
-      : { name: c.context, status: 'COMPLETED', conclusion: c.state ?? null },
+      : mapStatusContext(c),
   );
+}
+
+function mapStatusContext(c: GqlNode): CheckContext {
+  const name = c.context;
+  switch (c.state) {
+    case 'PENDING':
+    case 'EXPECTED':
+      return { name, status: 'IN_PROGRESS', conclusion: null };
+    case 'FAILURE':
+    case 'ERROR':
+      return { name, status: 'COMPLETED', conclusion: 'FAILURE' };
+    case 'SUCCESS':
+      return { name, status: 'COMPLETED', conclusion: 'SUCCESS' };
+    default:
+      return { name, status: 'COMPLETED', conclusion: null };
+  }
 }
 
 export async function fetchOpenPrs(cfg: Config): Promise<PrInput[]> {

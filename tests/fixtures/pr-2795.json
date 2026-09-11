@@ -4,8 +4,8 @@
   "url": "https://github.com/paranext/paranext-core/pull/2795",
   "isDraft": false,
   "headOid": "02db1998a1b3adbc4612024d0912b7b4ac987cd5",
-  "mergeable": "UNKNOWN",
-  "mergeStateStatus": "UNKNOWN",
+  "mergeable": "MERGEABLE",
+  "mergeStateStatus": "BLOCKED",
   "reviews": [],
   "comments": [],
   "commits": [

@@ -339,8 +339,8 @@
     },
     {
       "name": "code-review/reviewable",
-      "status": "COMPLETED",
-      "conclusion": "PENDING"
+      "status": "IN_PROGRESS",
+      "conclusion": null
     },
     {
       "name": "CodeQL",
