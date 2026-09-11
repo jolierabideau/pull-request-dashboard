@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { classify } from '../src/rules/classify.js';
-import { lastReviewerActivity } from '../src/rules/activity.js';
+import { lastMyActivity, lastReviewerActivity } from '../src/rules/activity.js';
 import type { Bucket, Config, PrInput } from '../src/types.js';
 
 const cfg: Config = {
@@ -20,12 +20,22 @@ describe('classify against captured PRs', () => {
   const cases: [number, Bucket, string][] = [
     [2717, 'ready-to-merge', 'newest approval footer is complete!'],
     [2720, 'ready-to-merge', "approved with Reviewable's own summary thread"],
-    [2664, 'ready-to-merge', 'approved; head commit is a bare merge of main'],
+    [2664, 'blocked-mechanically', 'a failing windows build outranks its clean approval'],
     [2796, 'draft', 'draft and conflicting stays quiet'],
   ];
 
   it.each(cases)('pr-%i → %s (%s)', (n, bucket) => {
     expect(run(n).bucket).toBe(bucket);
+  });
+
+  // #2664's head commit is a bare merge of origin/main. It must not count as
+  // author activity — that discount is what keeps merge-main noise from
+  // falsely reporting "waiting on reviewer".
+  it('pr-2664 does not count its bare merge of main as author activity', () => {
+    const pr = load(2664);
+    const head = pr.commits.at(-1);
+    expect(head?.messageHeadline).toMatch(/Merge remote-tracking branch 'origin\/main'/);
+    expect(lastMyActivity(pr, cfg)?.at).not.toBe(head?.committedDate);
   });
 
   it('pr-2795 is not blocked by its cancelled-only checks', () => {
