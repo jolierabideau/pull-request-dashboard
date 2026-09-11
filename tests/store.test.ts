@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { openStore } from '../src/store/db.js';
 
@@ -56,9 +59,21 @@ describe('notification dedupe', () => {
   });
 
   it('survives a restart', () => {
-    const s = store();
-    s.recordNotified(2795, 'needs-your-response', NOW);
-    expect(s.shouldNotify(2795, 'needs-your-response', NOW)).toBe(false);
+    const dir = mkdtempSync(join(tmpdir(), 'prd-store-'));
+    const path = join(dir, 'test.db');
+
+    const first = openStore(path);
+    first.recordNotified(2795, 'needs-your-response', NOW);
+    first.close();
+
+    // A genuinely separate handle on the same file — this is the restart.
+    const second = openStore(path);
+    try {
+      expect(second.shouldNotify(2795, 'needs-your-response', NOW)).toBe(false);
+    } finally {
+      second.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // The user posts several comments per round, minutes apart.
