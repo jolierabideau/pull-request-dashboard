@@ -32,6 +32,16 @@ describe('loadConfig', () => {
       .toThrow(/pollIntervalMs/);
   });
 
+  it('rejects a value still left as the example placeholder', () => {
+    expect(() => loadConfig(write({ ...valid, me: '<your-github-login>' })))
+      .toThrow(/me/);
+  });
+
+  it('rejects a repoPath that does not exist on disk', () => {
+    expect(() => loadConfig(write({ ...valid, repoPath: '/nonexistent/clone' })))
+      .toThrow(/repoPath/);
+  });
+
   it('points at the example file when config.json is absent', () => {
     expect(() => loadConfig('/nonexistent/config.json'))
       .toThrow(/config\.example\.json/);

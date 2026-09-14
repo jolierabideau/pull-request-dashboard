@@ -1,9 +1,13 @@
 {
-  "repoPath": "/Users/jolierabideau/dev/paranext-core",
+  "repoPath": "<absolute path to your paranext-core clone>",
   "owner": "paranext",
   "name": "paranext-core",
-  "me": "jolierabideau",
-  "botLogins": ["devin-ai-integration", "dependabot", "github-actions"],
+  "me": "<your-github-login>",
+  "botLogins": [
+    "devin-ai-integration",
+    "dependabot",
+    "github-actions"
+  ],
   "pollIntervalMs": 180000,
   "staleAfterHours": 48
 }

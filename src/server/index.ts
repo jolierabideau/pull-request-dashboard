@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { loadConfig } from '../config.js';
+import { notificationsSupported } from '../notify/osascript.js';
 import { openStore } from '../store/db.js';
 import { createPoller } from './poller.js';
 import { registerRoutes } from './routes.js';
@@ -7,6 +8,11 @@ import { registerRoutes } from './routes.js';
 const config = loadConfig(process.env.PRD_CONFIG ?? 'config.json');
 const store = openStore(process.env.PRD_DB ?? 'pr-dashboard.db');
 const poller = createPoller(config, store);
+
+console.log(`Tracking ${config.me} on ${config.owner}/${config.name} (${config.repoPath})`);
+if (!notificationsSupported()) {
+  console.log('Desktop notifications are macOS-only; the board still works.');
+}
 
 const app = Fastify({ logger: { level: 'warn' } });
 registerRoutes(app, poller, store);

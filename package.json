@@ -2,6 +2,9 @@
   "name": "pr-dashboard",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "run-p dev:api dev:web",
     "test": "vitest run",

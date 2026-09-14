@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { Config } from './types.js';
 
 const REQUIRED = [
@@ -19,6 +19,14 @@ export function loadConfig(path: string): Config {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
   for (const key of REQUIRED) {
     if (parsed[key] === undefined) throw new Error(`Config is missing "${key}".`);
+  }
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === 'string' && /^<.+>$/.test(value)) {
+      throw new Error(`Config "${key}" is still the example placeholder. Edit ${path}.`);
+    }
+  }
+  if (!existsSync(parsed.repoPath as string)) {
+    throw new Error(`Config "repoPath" does not exist: ${String(parsed.repoPath)}.`);
   }
   if ((parsed.pollIntervalMs as number) < 30_000) {
     throw new Error('Config "pollIntervalMs" must be at least 30000 (30s).');
