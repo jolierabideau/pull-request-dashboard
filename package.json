@@ -7,11 +7,13 @@
   },
   "scripts": {
     "dev": "run-p dev:api dev:web",
+    "demo": "run-p demo:api dev:web",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "dev:api": "node --import tsx/esm src/server/index.ts",
-    "dev:web": "vite --config client/vite.config.ts"
+    "dev:web": "vite --config client/vite.config.ts",
+    "demo:api": "node --import tsx/esm src/server/demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
