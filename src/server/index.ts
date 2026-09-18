@@ -6,11 +6,14 @@ import {
   describeAddressInUse,
   exitWhenOrphaned,
   findPortHolder,
-  livePids,
-  ownAncestors,
+  liveProcesses,
+  ownSupervisors,
+  printSync,
 } from './lifecycle.js';
 import { createPoller } from './poller.js';
 import { registerRoutes } from './routes.js';
+
+const API_LABEL = { name: 'API', command: 'npm run dev' };
 
 const config = loadConfig(process.env.PRD_CONFIG ?? 'config.json');
 const store = openStore(process.env.PRD_DB ?? 'pr-dashboard.db');
@@ -29,10 +32,10 @@ poller.start();
 // `run-p` cannot always stop us on its way out, and a surviving API keeps the
 // port against the next `npm run dev`. Stop ourselves instead.
 exitWhenOrphaned({
-  ancestors: ownAncestors(),
-  livePids,
+  supervisors: ownSupervisors(),
+  liveProcesses,
   onOrphaned: () => {
-    console.log('Whatever started this server is gone; shutting down.');
+    printSync('stdout', 'Whatever started this server is gone; shutting down.');
     process.exit(0);
   },
 });
@@ -42,7 +45,7 @@ try {
   await app.listen({ port, host: '127.0.0.1' });
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
-  console.error(describeAddressInUse(port, findPortHolder(port)));
+  printSync('stderr', describeAddressInUse(port, findPortHolder(port), API_LABEL));
   process.exit(1);
 }
 console.log(`PR dashboard API on http://127.0.0.1:${port}`);

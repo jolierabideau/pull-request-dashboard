@@ -191,10 +191,12 @@ npm run test:watch
 npm run typecheck
 ```
 
-Both servers stop themselves when whatever started them — `run-p`, or the terminal —
-goes away, so a half-collapsed `npm run dev` can't leave an API behind holding port
-5174. If the port is taken anyway, startup says which pid holds it instead of throwing
-an `EADDRINUSE` stack trace. See `src/server/lifecycle.ts`.
+Both servers stop themselves when the npm/`run-p` chain that started them goes away,
+so a half-collapsed `npm run dev` can't leave an API behind holding port 5174 or a Vite
+behind holding 5173. (The terminal above that chain is deliberately not watched — a
+backgrounded `npm run dev:api` whose launcher exits is fine.) If a port is taken anyway,
+startup says which pid holds it instead of throwing an `EADDRINUSE` stack trace, and
+`PORT=` moves the API and the web server's proxy together. See `src/server/lifecycle.ts`.
 
 Classification is covered by unit tests plus fixture tests built from nine real PRs in
 `tests/fixtures/`. `scripts/capture-fixtures.ts` refreshes them — pass the PR

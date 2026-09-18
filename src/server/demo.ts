@@ -12,8 +12,9 @@ import {
   describeAddressInUse,
   exitWhenOrphaned,
   findPortHolder,
-  livePids,
-  ownAncestors,
+  liveProcesses,
+  ownSupervisors,
+  printSync,
 } from './lifecycle.js';
 import { buildBoard, type Board } from './poller.js';
 import { openStore, type Store } from '../store/db.js';
@@ -106,10 +107,10 @@ if (invokedDirectly) {
   // `npm run demo` runs under `run-p` exactly as `npm run dev` does, so it can
   // be stranded holding the port the same way. See ./lifecycle.ts.
   exitWhenOrphaned({
-    ancestors: ownAncestors(),
-    livePids,
+    supervisors: ownSupervisors(),
+    liveProcesses,
     onOrphaned: () => {
-      console.log('Whatever started this server is gone; shutting down.');
+      printSync('stdout', 'Whatever started this server is gone; shutting down.');
       process.exit(0);
     },
   });
@@ -119,7 +120,13 @@ if (invokedDirectly) {
     await serveDemo(port);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
-    console.error(describeAddressInUse(port, findPortHolder(port)));
+    printSync(
+      'stderr',
+      describeAddressInUse(port, findPortHolder(port), {
+        name: 'demo board',
+        command: 'npm run demo',
+      }),
+    );
     process.exit(1);
   }
   console.log(`Demo board (${FIXTURES.length} captured PRs) on http://127.0.0.1:${port}`);
