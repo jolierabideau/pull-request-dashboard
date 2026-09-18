@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "dev:api": "node --import tsx/esm src/server/index.ts",
-    "dev:web": "vite --config client/vite.config.ts",
+    "dev:web": "node scripts/dev-web.mjs",
     "demo:api": "node --import tsx/esm src/server/demo.ts"
   },
   "dependencies": {

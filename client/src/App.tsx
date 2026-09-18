@@ -35,6 +35,11 @@ export function App() {
 
   if (board === null) return <main><p>{failed ? 'API unreachable.' : 'Loading…'}</p></main>;
 
+  // Cards age against the moment the board was built, so their ages agree with
+  // the verdicts computed at that moment. Only the pre-first-poll shell has no
+  // `fetchedAt`, and it has no cards to age.
+  const asOf = board.fetchedAt === null ? Date.now() : Date.parse(board.fetchedAt);
+
   return (
     <main>
       <h1>{board.yourCourtCount} in your court</h1>
@@ -61,7 +66,12 @@ export function App() {
             {EXPANDED.has(bucket) ? (
               <ul className="cards">
                 {items.map((item) => (
-                  <Card key={item.number} item={item} onChange={() => void load()} />
+                  <Card
+                    key={item.number}
+                    item={item}
+                    now={asOf}
+                    onChange={() => void load()}
+                  />
                 ))}
               </ul>
             ) : (
@@ -69,7 +79,12 @@ export function App() {
                 <summary>{items.length} hidden</summary>
                 <ul className="cards">
                   {items.map((item) => (
-                    <Card key={item.number} item={item} onChange={() => void load()} />
+                    <Card
+                      key={item.number}
+                      item={item}
+                      now={asOf}
+                      onChange={() => void load()}
+                    />
                   ))}
                 </ul>
               </details>
