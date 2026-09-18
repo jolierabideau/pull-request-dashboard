@@ -168,7 +168,7 @@ src/
   claude/     tie-breaks the two ambiguous review shapes
   store/      SQLite: Discord stamps, cached verdicts, notification state
   notify/     macOS notifications via `osascript`
-  server/     Fastify routes, the poll loop, and demo mode
+  server/     Fastify routes, the poll loop, demo mode, and dev-server lifetime
 client/src/   React board — App, Card, bucket labels and ordering
 ```
 
@@ -190,6 +190,11 @@ npm test          # vitest, one pass
 npm run test:watch
 npm run typecheck
 ```
+
+Both servers stop themselves when whatever started them — `run-p`, or the terminal —
+goes away, so a half-collapsed `npm run dev` can't leave an API behind holding port
+5174. If the port is taken anyway, startup says which pid holds it instead of throwing
+an `EADDRINUSE` stack trace. See `src/server/lifecycle.ts`.
 
 Classification is covered by unit tests plus fixture tests built from nine real PRs in
 `tests/fixtures/`. `scripts/capture-fixtures.ts` refreshes them — pass the PR

@@ -8,6 +8,13 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
+import {
+  describeAddressInUse,
+  exitWhenOrphaned,
+  findPortHolder,
+  livePids,
+  ownAncestors,
+} from './lifecycle.js';
 import { buildBoard, type Board } from './poller.js';
 import { openStore, type Store } from '../store/db.js';
 import type { BranchInput, Config, PrInput } from '../types.js';
@@ -96,8 +103,25 @@ const invokedDirectly = process.argv[1] !== undefined
   && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
+  // `npm run demo` runs under `run-p` exactly as `npm run dev` does, so it can
+  // be stranded holding the port the same way. See ./lifecycle.ts.
+  exitWhenOrphaned({
+    ancestors: ownAncestors(),
+    livePids,
+    onOrphaned: () => {
+      console.log('Whatever started this server is gone; shutting down.');
+      process.exit(0);
+    },
+  });
+
   const port = Number(process.env.PORT ?? 5174);
-  await serveDemo(port);
+  try {
+    await serveDemo(port);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+    console.error(describeAddressInUse(port, findPortHolder(port)));
+    process.exit(1);
+  }
   console.log(`Demo board (${FIXTURES.length} captured PRs) on http://127.0.0.1:${port}`);
   console.log('No GitHub access, no notifications, no writes to your database.');
 }
