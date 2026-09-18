@@ -6,9 +6,10 @@
  * up a config of their own, and so the README screenshot is reproducible.
  */
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
 import { buildBoard, type Board } from './poller.js';
-import { openStore } from '../store/db.js';
+import { openStore, type Store } from '../store/db.js';
 import type { BranchInput, Config, PrInput } from '../types.js';
 
 /** The PRs captured by scripts/capture-fixtures.ts. */
@@ -31,9 +32,10 @@ export const DEMO_CONFIG: Config = {
 /**
  * Pinned so the board — and therefore the screenshot — is identical on every
  * run. The fixtures were captured around this moment, so relative ages read
- * sensibly against it.
+ * sensibly against it. The client reads its ages off `fetchedAt` rather than
+ * the wall clock, so the card ages stay pinned to this moment too.
  */
-const DEMO_NOW = new Date('2026-09-11T12:00:00Z');
+export const DEMO_NOW = new Date('2026-09-11T12:00:00Z');
 
 const DEMO_BRANCHES: BranchInput[] = [
   { name: 'feature/paratext-sync', upstreamGone: false, aheadOfMain: 3, prNumber: null },
@@ -45,29 +47,53 @@ const loadFixture = (n: number): PrInput =>
     readFileSync(new URL(`../../tests/fixtures/pr-${n}.json`, import.meta.url), 'utf8'),
   ) as PrInput;
 
-export function buildDemoBoard(): Board {
-  // An in-memory store keeps demo mode from reading or writing the real
-  // notification and Discord state in pr-dashboard.db.
-  const store = openStore(':memory:');
+/**
+ * Builds the demo board. Pass a `store` to keep the Discord state between
+ * builds; without one, an in-memory store is opened and closed per call.
+ * Either way demo mode never reads or writes the real notification and
+ * Discord state in pr-dashboard.db.
+ */
+export function buildDemoBoard(store?: Store): Board {
+  const scratch = store ?? openStore(':memory:');
   try {
-    return buildBoard(FIXTURES.map(loadFixture), DEMO_BRANCHES, store, DEMO_CONFIG, DEMO_NOW);
+    return buildBoard(FIXTURES.map(loadFixture), DEMO_BRANCHES, scratch, DEMO_CONFIG, DEMO_NOW);
   } finally {
-    store.close();
+    if (store === undefined) scratch.close();
   }
 }
 
 export async function serveDemo(port: number): Promise<void> {
-  const board = buildDemoBoard();
+  // Held open for the life of the process so that clicking "Posted to
+  // Discord" actually moves the card, as it does on the real board.
+  const store = openStore(':memory:');
+  let board = buildDemoBoard(store);
+
   const app = Fastify({ logger: false });
   app.get('/api/board', async (_request, reply) => reply.send(board));
-  // Accepted and discarded: the button should not error in the demo, but
-  // there is no real state to move.
-  app.post('/api/pr/:number/discord', async (_request, reply) => reply.send({ ok: true }));
+
+  app.post<{ Params: { number: string }; Body: { posted: boolean } }>(
+    '/api/pr/:number/discord',
+    async (request, reply) => {
+      const number = Number(request.params.number);
+      if (!Number.isInteger(number)) {
+        return reply.code(400).send({ error: 'bad PR number' });
+      }
+      // Stamped with the pinned clock, not the wall clock, so the receipt
+      // ("posted to Discord Nh ago") stays reproducible.
+      store.setDiscordPostedAt(
+        number,
+        request.body?.posted === false ? null : DEMO_NOW.toISOString(),
+      );
+      board = buildDemoBoard(store);
+      return reply.send({ ok: true });
+    },
+  );
+
   await app.listen({ port, host: '127.0.0.1' });
 }
 
 const invokedDirectly = process.argv[1] !== undefined
-  && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+  && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
   const port = Number(process.env.PORT ?? 5174);

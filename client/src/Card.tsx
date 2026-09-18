@@ -5,16 +5,23 @@ const DOT: Record<BoardItem['checkDot'], string> = {
   fail: '#d64545', pending: '#c98a20', pass: '#3f9142', none: 'transparent',
 };
 
-const ago = (iso: string | null): string => {
+/**
+ * Ages are measured against the board's own `fetchedAt`, not the wall clock,
+ * so that a card's age agrees with the verdict computed at that same moment —
+ * and so the pinned demo board reads the same on every run.
+ */
+const ago = (iso: string | null, now: number): string => {
   if (iso === null) return '';
-  const hours = (Date.now() - Date.parse(iso)) / 3_600_000;
+  const hours = (now - Date.parse(iso)) / 3_600_000;
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
   if (hours < 48) return `${Math.round(hours)}h`;
   return `${Math.round(hours / 24)}d`;
 };
 
-export function Card({ item, onChange }: {
+export function Card({ item, now, onChange }: {
   item: BoardItem;
+  /** The board's `fetchedAt`, as epoch ms — the reference point for ages. */
+  now: number;
   onChange: () => void;
 }) {
   const post = async () => {
@@ -29,7 +36,7 @@ export function Card({ item, onChange }: {
         <a href={item.url} target="_blank" rel="noreferrer">
           #{item.number} {item.title}
         </a>
-        <span className="age">{ago(item.displayTime)}</span>
+        <span className="age">{ago(item.displayTime, now)}</span>
       </div>
 
       <ul className="receipts">

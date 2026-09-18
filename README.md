@@ -44,11 +44,12 @@ Demo mode is also what produces the screenshots above.
 
 ## Prerequisites
 
-Only needed for the real board (`npm run dev`); the demo needs just Node.
+Node is needed for everything, including the demo. The rest are needed only for
+the real board (`npm run dev`).
 
 | | |
 | --- | --- |
-| **Node 22+** | `better-sqlite3` builds a native module, so an older Node fails at install. |
+| **Node 22+** | Needed even for the demo: `npm install` builds the `better-sqlite3` native module, and an older Node fails at that step. |
 | **GitHub CLI, logged in** | The server reads your token from `gh auth token` at startup. Run `gh auth login` first. No token is ever stored in this repo. |
 | **A local clone of the repo you're tracking** | The branch list reads it with `git -C`. Nothing is written to it. |
 | **`ANTHROPIC_API_KEY`** | Optional. Used only to break ties on ambiguous reviews — see [Review escalation](#review-escalation). |
