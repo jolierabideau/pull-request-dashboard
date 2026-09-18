@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "dev:api": "node --import tsx/esm src/server/index.ts",
-    "dev:web": "node scripts/dev-web.mjs",
+    "dev:web": "node --import tsx/esm scripts/dev-web.ts",
     "demo:api": "node --import tsx/esm src/server/demo.ts"
   },
   "dependencies": {
