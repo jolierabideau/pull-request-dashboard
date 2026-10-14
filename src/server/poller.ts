@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { classify } from '../rules/classify.js';
 import { classifyReviewing } from '../rules/reviewing.js';
 import { checkDot } from '../rules/checks.js';
@@ -33,6 +34,18 @@ export interface BranchItem {
   bucket: Extract<Bucket, 'unsubmitted-branch' | 'dead-branch'>;
 }
 
+/** A notification the server decided to fire; browsers replay these. */
+export interface NotificationEvent {
+  /** Monotonic within one server process, starting at 1. */
+  id: number;
+  title: string;
+  body: string;
+  url: string;
+  at: string;
+}
+
+const NOTIFICATION_LOG_SIZE = 50;
+
 export interface Board {
   /** PRs the user wrote. */
   items: BoardItem[];
@@ -49,6 +62,10 @@ export interface Board {
   fetchedAt: string | null;
   stale: boolean;
   error: string | null;
+  /** The last notifications fired, newest last. */
+  notifications: NotificationEvent[];
+  /** Identifies the server process; event ids restart when it changes. */
+  epoch: string;
 }
 
 const ORDER: Bucket[] = [
@@ -129,6 +146,8 @@ export function buildBoard(
     fetchedAt: now.toISOString(),
     stale: false,
     error: null,
+    notifications: [],
+    epoch: '',
   };
   sortItems(board);
   countCourts(board);
@@ -147,6 +166,13 @@ export function createPoller(cfg: Config, store: Store): Poller {
   let timer: NodeJS.Timeout | null = null;
   let generation = 0;
   let stopped = false;
+  const epoch = randomUUID();
+  const log: NotificationEvent[] = [];
+  let nextEventId = 1;
+  const record = (event: Omit<NotificationEvent, 'id' | 'at'>): void => {
+    log.push({ ...event, id: nextEventId++, at: new Date().toISOString() });
+    if (log.length > NOTIFICATION_LOG_SIZE) log.splice(0, log.length - NOTIFICATION_LOG_SIZE);
+  };
 
   const refresh = async (): Promise<void> => {
     const mine = ++generation;
@@ -169,7 +195,9 @@ export function createPoller(cfg: Config, store: Store): Poller {
 
       await attachVerdicts(next, prs, store);
       if (superseded()) return;
-      sendNotifications(next, store, cfg);
+      sendNotifications(next, store, cfg, record);
+      next.notifications = [...log];
+      next.epoch = epoch;
       commit(next);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -184,6 +212,8 @@ export function createPoller(cfg: Config, store: Store): Poller {
             fetchedAt: new Date().toISOString(),
             stale: true,
             error: message,
+            notifications: [...log],
+            epoch,
           }
         : { ...board, stale: true, error: message };
       commit(staleBoard);
@@ -236,7 +266,12 @@ async function attachVerdicts(
   countCourts(board);
 }
 
-function sendNotifications(board: Board, store: Store, cfg: Config): void {
+function sendNotifications(
+  board: Board,
+  store: Store,
+  cfg: Config,
+  record: (event: Omit<NotificationEvent, 'id' | 'at'>) => void,
+): void {
   const now = new Date();
   for (const item of [...board.items, ...board.reviewing]) {
     const key = notifyKey(item, cfg, now);
@@ -246,7 +281,9 @@ function sendNotifications(board: Board, store: Store, cfg: Config): void {
       const body = item.role === 'reviewer'
         ? `review needed: ${item.title}`
         : `${key}: ${item.title}`;
-      notify(`${repoName} #${item.number}`, body, item.url);
+      const title = `${repoName} #${item.number}`;
+      notify(title, body, item.url);
+      record({ title, body, url: item.url });
       store.recordNotified(id, key, now);
       continue;
     }

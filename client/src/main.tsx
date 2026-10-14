@@ -14,6 +14,8 @@ style.textContent = `
   .tab[aria-selected="true"] { background: #fff; border-color: #e6e3dd; color: #1c1b19; font-weight: 600; }
   .badge { margin-left: 6px; padding: 0 7px; border-radius: 999px; background: #1c1b19; color: #faf9f7;
            font-size: 12px; font-variant-numeric: tabular-nums; }
+  .notify-toggle { margin: -8px 0 8px; padding: 2px 8px; font-size: 12px; color: #6b6862; }
+  .notify-status { margin: -10px 0 8px; font-size: 12px; color: #8a867f; }
   .empty { color: #6b6862; margin-top: 20px; }
   .banner { background: #fdf3d7; border: 1px solid #e8d9a0; color: #1c1b19; padding: 8px 12px; border-radius: 6px; }
   .cards { list-style: none; padding: 0; display: grid; gap: 10px; }
@@ -31,7 +33,8 @@ style.textContent = `
   @media (prefers-color-scheme: dark) {
     body { background: #171614; color: #ece9e3; }
     h2 { color: #9b968d; }
-    .summary, .empty { color: #9b968d; }
+    .summary, .empty, .notify-toggle { color: #9b968d; }
+    .notify-status { color: #8a867f; }
     .tabs { border-bottom-color: #35332e; }
     .tab { color: #9b968d; }
     .tab[aria-selected="true"] { background: #201f1c; border-color: #35332e; color: #ece9e3; }

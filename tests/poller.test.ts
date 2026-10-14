@@ -500,3 +500,65 @@ describe('reviewing PRs', () => {
     mockFetchReviewingPrs.mockResolvedValue([]);
   });
 });
+
+describe('notification event log', () => {
+  const blocked = (number: number) => pr({ number, mergeStateStatus: 'DIRTY' });
+  const fresh = () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    mockFetchReviewingPrs.mockReset();
+    mockFetchReviewingPrs.mockResolvedValue([]);
+    return createPoller(cfg, openStore(':memory:', HOME));
+  };
+
+  it('records an event with title, body and url when a notification fires', async () => {
+    const poller = fresh();
+    mockFetchOpenPrs.mockResolvedValue([{ ...blocked(3), url: 'https://example.test/3', title: 'Fix' }]);
+    await poller.refresh();
+
+    const board = poller.snapshot();
+    expect(board?.epoch).toBeTruthy();
+    expect(board?.notifications).toHaveLength(1);
+    expect(board?.notifications[0]).toMatchObject({
+      id: 1, title: 'paranext-core #3', body: 'blocked-mechanically: Fix', url: 'https://example.test/3',
+    });
+    expect(Number.isNaN(Date.parse(board?.notifications[0]?.at ?? ''))).toBe(false);
+  });
+
+  it('records nothing when no notification is decided', async () => {
+    const poller = fresh();
+    mockFetchOpenPrs.mockResolvedValue([pr({ number: 1 })]);
+    await poller.refresh();
+    await poller.refresh();
+    expect(mockNotify).not.toHaveBeenCalled();
+    expect(poller.snapshot()?.notifications).toEqual([]);
+  });
+
+  it('does not record the same state twice', async () => {
+    const poller = fresh();
+    mockFetchOpenPrs.mockResolvedValue([blocked(3)]);
+    await poller.refresh();
+    await poller.refresh();
+    expect(poller.snapshot()?.notifications).toHaveLength(1);
+  });
+
+  it('numbers events upward and keeps only the last 50', async () => {
+    const poller = fresh();
+    mockFetchOpenPrs.mockResolvedValue(Array.from({ length: 60 }, (_, i) => blocked(i + 1)));
+    await poller.refresh();
+
+    const events = poller.snapshot()?.notifications ?? [];
+    expect(events).toHaveLength(50);
+    expect(events.map((e) => e.id)).toEqual(Array.from({ length: 50 }, (_, i) => i + 11));
+  });
+
+  it('keeps the log on a stale board after a failed poll', async () => {
+    const poller = fresh();
+    mockFetchOpenPrs.mockResolvedValueOnce([blocked(3)]);
+    await poller.refresh();
+    mockFetchOpenPrs.mockRejectedValueOnce(new Error('boom'));
+    await poller.refresh();
+    expect(poller.snapshot()?.stale).toBe(true);
+    expect(poller.snapshot()?.notifications).toHaveLength(1);
+  });
+});

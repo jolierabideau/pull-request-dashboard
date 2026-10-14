@@ -15,7 +15,9 @@ const poller = createPoller(config, store);
 const tracked = config.scope === 'org' ? `every repo of ${config.owner}` : `${config.owner}/${config.name}`;
 console.log(`Tracking ${config.me} on ${tracked} (branches from ${config.repoPath})`);
 if (!notificationsSupported()) {
-  console.log('Desktop notifications are macOS-only; the board still works.');
+  console.log(
+    'Desktop notifications: open the board and click "Enable notifications" (browser notifications).',
+  );
 }
 
 const app = Fastify({ logger: { level: 'warn' } });

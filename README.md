@@ -54,7 +54,7 @@ the real board (`npm run dev`).
 | **GitHub CLI, logged in** | The server reads your token from `gh auth token` at startup. Run `gh auth login` first. No token is ever stored in this repo. |
 | **A local clone of your home repo** | The branch list reads it with `git -C`. Nothing is written to it. |
 | **`ANTHROPIC_API_KEY`** | Optional. Used only to break ties on ambiguous reviews — see [Review escalation](#review-escalation). |
-| **macOS, for notifications** | The board itself works everywhere; desktop notifications don't. See [Known limits](#known-limits). |
+| **A browser that allows notifications** | Optional. Native `osascript` notifications are macOS-only; browser notifications work everywhere. See [Known limits](#known-limits). |
 
 ## Quickstart
 
@@ -151,6 +151,14 @@ Discord-posted PR goes stale. They are debounced 15
 minutes and only re-fire when a PR actually changes state, so a PR sitting still stays
 quiet. Clicking one opens the PR.
 
+On every OS, click **Enable notifications** under the headline to get them as browser
+notifications. The server decides when to notify; the open board shows each new one once
+(however many tabs are open), and a board you open fresh shows no backlog. They work
+while the tab is in the background or the window minimized, but not once the tab is
+closed. On macOS the server also sends its own `osascript` notification, so enabling the
+browser ones there doubles them up — a Mac user who prefers the native ones simply doesn't
+enable browser notifications.
+
 **Staleness.** If the API can't be reached the board keeps showing the last good data
 behind a banner saying so, and keeps retrying every 30s rather than blanking out.
 
@@ -246,9 +254,10 @@ an authenticated `gh`.
 
 ## Known limits
 
-- **Notifications are macOS-only.** They shell out to `osascript`. On Linux and
-  Windows `notify()` is a no-op and the server says so once at startup — the board,
-  buckets, and receipts all work normally; you just have to look at the tab.
+- **Notifications need the board open.** Browser notifications work on every OS but only
+  while the board is open in a tab; a closed tab gets none. The native `osascript`
+  notifications are macOS-only and `notify()` is a no-op elsewhere, which the server says
+  once at startup.
 - **One user per checkout.** `me` is a single login, and the SQLite file holds that
   person's notification and Discord state. Teammates each clone and configure their
   own; don't share a working copy.

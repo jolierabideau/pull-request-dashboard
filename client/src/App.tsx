@@ -4,6 +4,7 @@ import {
   BUCKET_LABEL, BUCKET_ORDER, EXPANDED, REVIEW_BUCKET_LABEL, REVIEW_BUCKET_ORDER,
 } from './buckets';
 import { Card } from './Card';
+import { notificationPermission, showNewNotifications } from './notifications';
 
 type Tab = 'mine' | 'others';
 const TABS: { id: Tab; label: string }[] = [
@@ -37,6 +38,27 @@ const summaryLine = (board: Board): string => {
   }
   return parts.length === 0 ? 'Nothing waiting on you' : parts.join(' · ');
 };
+
+function NotificationControl() {
+  const [permission, setPermission] = useState(notificationPermission);
+  if (permission === null) return null;
+  if (permission === 'default') {
+    return (
+      <button
+        type="button"
+        className="notify-toggle"
+        onClick={() => void Notification.requestPermission().then(setPermission)}
+      >
+        Enable notifications
+      </button>
+    );
+  }
+  return (
+    <p className="notify-status">
+      {permission === 'granted' ? 'Notifications on' : 'Notifications blocked in browser settings'}
+    </p>
+  );
+}
 
 function BucketSections({ order, labels, items, asOf, onChange }: {
   order: readonly string[];
@@ -103,7 +125,9 @@ export function App() {
 
   const load = useCallback(async () => {
     try {
-      setBoard(await fetchBoard());
+      const next = await fetchBoard();
+      showNewNotifications(next);
+      setBoard(next);
       setFailed(false);
     } catch {
       setFailed(true);
@@ -133,6 +157,7 @@ export function App() {
     <main>
       <h1>{board.yourCourtCount} in your court</h1>
       <p className="summary">{summaryLine(board)}</p>
+      <NotificationControl />
 
       {failed && (
         <p className="banner">

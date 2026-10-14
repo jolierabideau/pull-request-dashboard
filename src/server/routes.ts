@@ -15,6 +15,7 @@ export function registerRoutes(
         items: [], reviewing: [], branches: [],
         yourCourtCount: 0, myCourtCount: 0, reviewCourtCount: 0,
         fetchedAt: null, stale: true, error: 'no data yet — retrying',
+        notifications: [], epoch: '',
       });
     }
     return reply.send(board);

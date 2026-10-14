@@ -15,6 +15,14 @@ export interface BoardItem {
   verdict: { asks: string[] } | null;
 }
 
+export interface NotificationEvent {
+  id: number;
+  title: string;
+  body: string;
+  url: string;
+  at: string;
+}
+
 export interface Board {
   items: BoardItem[];
   reviewing: BoardItem[];
@@ -25,6 +33,8 @@ export interface Board {
   fetchedAt: string | null;
   stale: boolean;
   error: string | null;
+  notifications: NotificationEvent[];
+  epoch: string;
 }
 
 export const fetchBoard = async (): Promise<Board> => {
