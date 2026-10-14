@@ -9,6 +9,7 @@ const cfg: Config = {
   pollIntervalMs: 180000, staleAfterHours: 48,
 };
 const ALICE = 'alice';
+const NOW = new Date('2026-09-11T12:00:00Z');
 
 const commit = (over: Partial<CommitInput>): CommitInput => ({
   oid: 'abc', committedDate: '2026-09-01T00:00:00Z',
@@ -18,7 +19,7 @@ const commit = (over: Partial<CommitInput>): CommitInput => ({
 
 const pr = (over: Partial<PrInput>): PrInput => ({
   repo: 'paranext/paranext-core', number: 1, title: 't', url: 'u',
-  author: ALICE, requestedReviewers: [], isDraft: false, headOid: 'abc',
+  author: ALICE, updatedAt: '2026-09-10T00:00:00Z', isDraft: false, headOid: 'abc',
   mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
   reviews: [], comments: [], commits: [commit({})], threads: [], checks: [], ...over,
 });
@@ -31,7 +32,9 @@ const review = (over: Partial<ReviewInput>): ReviewInput => ({
 const footer = (waitingOn: string) =>
   `Reviewable status: all files reviewed, 1 unresolved discussion (waiting on ${waitingOn}).`;
 
-const classify = (input: PrInput) => classifyReviewing(input, cfg);
+const classify = (input: PrInput, config: Config = cfg) => classifyReviewing(input, config, NOW);
+
+const daysAgo = (days: number): string => new Date(NOW.getTime() - days * 86_400_000).toISOString();
 
 describe('classifyReviewing — Reviewable footer', () => {
   it('needs you when the newest footer names the user', () => {
@@ -60,9 +63,8 @@ describe('classifyReviewing — Reviewable footer', () => {
     expect(result.bucket).toBe('review-needs-you');
   });
 
-  it('beats a re-request and an approval', () => {
+  it('beats an approval', () => {
     const result = classify(pr({
-      requestedReviewers: [cfg.me],
       reviews: [
         review({ id: 'a', state: 'APPROVED', submittedAt: '2026-09-04T00:00:00Z' }),
         review({ id: 'f', author: ALICE, bodyText: footer(ALICE), submittedAt: '2026-09-06T00:00:00Z' }),
@@ -101,20 +103,76 @@ describe('classifyReviewing — Reviewable footer', () => {
   });
 });
 
-describe('classifyReviewing — re-requested', () => {
-  it('needs you when the user is in requestedReviewers', () => {
-    const result = classify(pr({
+describe('classifyReviewing — review requests are ignored', () => {
+  it('leaves a requested PR where the author acting last puts it', () => {
+    const result = classify({
+      ...pr({
+        reviews: [review({ submittedAt: '2026-09-05T00:00:00Z' })],
+        commits: [commit({ committedDate: '2026-09-06T00:00:00Z' })],
+      }),
       requestedReviewers: [cfg.me],
-      reviews: [review({})],
-    }));
+    } as PrInput);
     expect(result.bucket).toBe('review-needs-you');
-    expect(result.receipts).toContain('your review was re-requested');
-    expect(result.displayTime).toBeNull();
+    expect(result.receipts.join(' ')).not.toContain('re-requested');
   });
 
-  it('ignores a request for somebody else', () => {
-    const result = classify(pr({ requestedReviewers: ['bob'], reviews: [review({})] }));
+  it('waits on the author for a requested PR where the user acted last', () => {
+    const result = classify({
+      ...pr({ reviews: [review({})] }),
+      requestedReviewers: [cfg.me],
+    } as PrInput);
     expect(result.bucket).toBe('review-waiting-on-author');
+  });
+});
+
+describe('classifyReviewing — drafts', () => {
+  it('waits on the author for a draft whose author pushed after the user', () => {
+    const result = classify(pr({
+      isDraft: true,
+      reviews: [review({})],
+      commits: [commit({ committedDate: '2026-09-06T00:00:00Z' })],
+    }));
+    expect(result.bucket).toBe('review-waiting-on-author');
+    expect(result.receipts).toEqual(['draft — not waiting on you']);
+  });
+
+  it('beats a footer that names the user', () => {
+    const result = classify(pr({
+      isDraft: true,
+      reviews: [review({ author: ALICE, bodyText: footer(cfg.me), submittedAt: '2026-09-06T00:00:00Z' })],
+    }));
+    expect(result.bucket).toBe('review-waiting-on-author');
+  });
+});
+
+describe('classifyReviewing — gone quiet', () => {
+  const stale = (days: number, over: Partial<PrInput> = {}) =>
+    pr({ updatedAt: daysAgo(days), reviews: [review({})], ...over });
+
+  it('uses the normal rules at 29 days', () => {
+    expect(classify(stale(29)).bucket).toBe('review-waiting-on-author');
+  });
+
+  it('goes quiet at 31 days, saying how long', () => {
+    const result = classify(stale(31));
+    expect(result.bucket).toBe('review-quiet');
+    expect(result.receipts).toEqual(['no activity for 31 days']);
+  });
+
+  it('honours quietAfterDays', () => {
+    expect(classify(stale(10), { ...cfg, quietAfterDays: 7 }).bucket).toBe('review-quiet');
+    expect(classify(stale(40), { ...cfg, quietAfterDays: 60 }).bucket).not.toBe('review-quiet');
+  });
+
+  it('beats a draft', () => {
+    expect(classify(stale(31, { isDraft: true })).bucket).toBe('review-quiet');
+  });
+
+  it('beats a footer that names the user', () => {
+    const result = classify(stale(31, {
+      reviews: [review({ author: ALICE, bodyText: footer(cfg.me), submittedAt: '2026-09-06T00:00:00Z' })],
+    }));
+    expect(result.bucket).toBe('review-quiet');
   });
 });
 
@@ -254,16 +312,6 @@ describe('classifyReviewing — last activity', () => {
 });
 
 describe('classifyReviewing — shape', () => {
-  it('adds a draft receipt and still classifies', () => {
-    const result = classify(pr({
-      isDraft: true,
-      reviews: [review({})],
-      commits: [commit({ committedDate: '2026-09-06T00:00:00Z' })],
-    }));
-    expect(result.bucket).toBe('review-needs-you');
-    expect(result.receipts[0]).toBe('draft');
-  });
-
   it('never escalates and carries no verdict', () => {
     const result = classify(pr({ reviews: [review({})] }));
     expect(result.escalate).toBeNull();

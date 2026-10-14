@@ -47,5 +47,6 @@ describe('notifyKey', () => {
     expect(NOTIFY_KEYS.has(keyOf('review-needs-you'))).toBe(true);
     expect(NOTIFY_KEYS.has(keyOf('review-waiting-on-author'))).toBe(false);
     expect(NOTIFY_KEYS.has(keyOf('review-approved'))).toBe(false);
+    expect(NOTIFY_KEYS.has(keyOf('review-quiet'))).toBe(false);
   });
 });

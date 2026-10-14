@@ -16,7 +16,7 @@ export const BUCKET_LABEL: Record<Bucket, string> = {
 };
 
 export const REVIEW_BUCKET_ORDER = [
-  'review-needs-you', 'review-waiting-on-author', 'review-approved',
+  'review-needs-you', 'review-waiting-on-author', 'review-approved', 'review-quiet',
 ] as const;
 
 export type ReviewBucket = (typeof REVIEW_BUCKET_ORDER)[number];
@@ -25,6 +25,7 @@ export const REVIEW_BUCKET_LABEL: Record<ReviewBucket, string> = {
   'review-needs-you': 'Needs your review',
   'review-waiting-on-author': 'Waiting on author',
   'review-approved': 'You approved',
+  'review-quiet': 'Gone quiet',
 };
 
 /** Buckets rendered expanded by default; the rest collapse to one line. */

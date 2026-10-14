@@ -12,9 +12,7 @@ export function mapPullRequest(node: GqlNode): PrInput {
     title: node.title,
     url: node.url,
     author: node.author?.login ?? 'unknown',
-    requestedReviewers: (node.reviewRequests?.nodes ?? [])
-      .map((r: GqlNode) => r.requestedReviewer?.login)
-      .filter((login: unknown): login is string => typeof login === 'string'),
+    updatedAt: node.updatedAt ?? '',
     isDraft: node.isDraft,
     headOid: node.headRefOid,
     mergeable: node.mergeable,

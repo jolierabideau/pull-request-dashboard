@@ -52,8 +52,8 @@ export interface PrInput {
   url: string;
   /** Login of the PR's author; 'unknown' when GitHub reports none. */
   author: string;
-  /** Logins of users with a pending review request on the PR. */
-  requestedReviewers: string[];
+  /** When GitHub last recorded any activity on the PR (ISO 8601). */
+  updatedAt: string;
   isDraft: boolean;
   headOid: string;
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
@@ -85,6 +85,7 @@ export type Bucket =
   | 'review-needs-you'
   | 'review-waiting-on-author'
   | 'review-approved'
+  | 'review-quiet'
   | 'unsubmitted-branch'
   | 'dead-branch';
 
@@ -123,4 +124,6 @@ export interface Config {
   botLogins: string[];
   pollIntervalMs: number;
   staleAfterHours: number;
+  /** Others' PRs with no activity for this many days go quiet. Defaults to 30. */
+  quietAfterDays?: number;
 }

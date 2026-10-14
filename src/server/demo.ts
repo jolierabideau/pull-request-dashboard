@@ -57,7 +57,7 @@ const loadFixture = (n: number): PrInput => {
     ...fixture,
     repo: fixture.repo ?? repoFromUrl(fixture.url),
     author: fixture.author ?? DEMO_CONFIG.me,
-    requestedReviewers: fixture.requestedReviewers ?? [],
+    updatedAt: fixture.updatedAt ?? DEMO_NOW.toISOString(),
   } as PrInput;
 };
 

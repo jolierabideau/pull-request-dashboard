@@ -39,7 +39,7 @@ const cfg: Config = {
 const NOW = new Date('2026-09-11T12:00:00Z');
 
 const pr = (over: Partial<PrInput>): PrInput => ({
-  repo: HOME, number: 1, title: 't', url: 'u', author: 'jolierabideau', requestedReviewers: [], isDraft: false, headOid: 'abc',
+  repo: HOME, number: 1, title: 't', url: 'u', author: 'jolierabideau', updatedAt: new Date().toISOString(), isDraft: false, headOid: 'abc',
   mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
   reviews: [], comments: [],
   commits: [{
@@ -432,6 +432,30 @@ describe('reviewing PRs', () => {
       [theirPr({ number: 10, repo: 'paranext/paratext-10-studio' })],
     );
     expect(board.reviewing).toHaveLength(1);
+  });
+
+  it('sorts quiet PRs last and does not count them in any court', () => {
+    const quiet = theirPr({ number: 14, updatedAt: '2026-06-01T00:00:00Z', reviews: [myReview] });
+    const board = buildBoard([], [], store(), cfg, NOW, [quiet, approved, needsYou]);
+    expect(board.reviewing.map((i) => i.bucket)).toEqual([
+      'review-needs-you', 'review-approved', 'review-quiet',
+    ]);
+    expect(board.reviewCourtCount).toBe(1);
+    expect(board.yourCourtCount).toBe(1);
+  });
+
+  it('does not notify for a quiet PR', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    mockFetchReviewingPrs.mockReset();
+    mockFetchOpenPrs.mockResolvedValue([]);
+    mockFetchReviewingPrs.mockResolvedValue([
+      theirPr({ number: 14, updatedAt: '2020-01-01T00:00:00Z' }),
+    ]);
+    await createPoller(cfg, store()).refresh();
+    expect(mockNotify).not.toHaveBeenCalled();
+    mockFetchReviewingPrs.mockReset();
+    mockFetchReviewingPrs.mockResolvedValue([]);
   });
 
   it('notifies once for a review waiting on you, titled with the repo name', async () => {

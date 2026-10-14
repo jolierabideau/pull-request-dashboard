@@ -103,17 +103,25 @@ to the repo name and has no Posted to Discord button.
 
 | Bucket | What puts a PR here |
 | --- | --- |
-| **Needs your review** | In order: the newest Reviewable footer names you in "waiting on"; your review was re-requested; or the author pushed or replied after your last review or comment. Renders expanded and counts toward the headline. |
-| **Waiting on author** | The newest footer names someone else, or you reviewed or commented after the author's last activity (or at the same moment). |
+| **Needs your review** | The newest Reviewable footer names you in "waiting on", or the author pushed or replied after your last review or comment. Renders expanded and counts toward the headline. |
+| **Waiting on author** | A draft (always, whatever else is true), the newest footer names someone else, or you reviewed or commented after the author's last activity (or at the same moment). |
 | **You approved** | Your newest review is an approval and the author has not commented since. A push after your approval does not pull it back, because Reviewable approvals survive pushes; a comment or thread reply from the author does. |
+| **Gone quiet** | GitHub shows no activity on the PR for more than `quietAfterDays` days (default 30). Collapsed, not counted in the headline, never notifies. |
 
-The first matching rule wins, and the card's receipts say which one it was. A footer
-only counts while nothing from you or the author is newer than the review carrying it.
-Only your activity and the author's matter: other reviewers are ignored, as are logins in
+Rules run in this order and the first match wins: gone quiet, draft, Reviewable footer,
+approved, who acted last. The card's receipts say which one it was.
+
+**Review requests are ignored on purpose.** Being listed as a requested reviewer never
+moves a PR, because many requests are automatic and say nothing about whether you will
+look. Only what you have actually done on a PR matters.
+
+The Reviewable-footer rule only applies when a review carries Reviewable's status footer.
+With plain GitHub comments it never fires, and who acted last decides. A footer only
+counts while nothing from you or the author is newer than the review carrying it. Only
+your activity and the author's matter: other reviewers are ignored, as are logins in
 `botLogins` (a bot's Reviewable footer is still read). The author's activity is their
 pushes (a bare merge of main does not count), issue comments, review-thread replies and
-reviews; yours is your reviews, issue comments and review-thread replies. A draft is
-classified the same way and its card says "draft".
+reviews; yours is your reviews, issue comments and review-thread replies.
 
 The headline counts both tabs: **N in your court** is your own PRs that need you plus the
 reviews waiting on you. Under it, a one-line summary breaks that down ("2 on your PRs · 1
@@ -148,7 +156,7 @@ behind a banner saying so, and keeps retrying every 30s rather than blanking out
 
 ## Configuration
 
-`config.json` is gitignored, so your copy stays yours. Every field is required except `scope`.
+`config.json` is gitignored, so your copy stays yours. Every field is required except `scope` and `quietAfterDays`.
 
 | Field | Meaning |
 | --- | --- |
@@ -159,6 +167,7 @@ behind a banner saying so, and keeps retrying every 30s rather than blanking out
 | `botLogins` | Logins whose reviews and comments don't count as human activity. |
 | `pollIntervalMs` | How often to poll GitHub. Minimum 30000; 180000 (3 min) is the default. |
 | `staleAfterHours` | How long a PR sits unlooked-at before the Discord nudge goes stale. |
+| `quietAfterDays` | Optional. Days without activity after which another person's PR moves to "Gone quiet" on the Others' PRs tab. A positive number; defaults to 30. |
 
 The example file ships with placeholders in angle brackets for the two fields that
 must be yours. The server refuses to start while any placeholder is left in place, and

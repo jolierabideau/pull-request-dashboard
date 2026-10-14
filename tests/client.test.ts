@@ -112,27 +112,17 @@ describe('mapPullRequest — repo identity', () => {
   });
 });
 
-describe('mapPullRequest — author and review requests', () => {
-  it('maps the author login and the requested reviewers', () => {
+describe('mapPullRequest — author and update time', () => {
+  it('maps the author login and updatedAt', () => {
     const pr = mapPullRequest({
-      ...baseNode,
-      author: { login: 'alice' },
-      reviewRequests: {
-        nodes: [
-          { requestedReviewer: { login: 'jolierabideau' } },
-          { requestedReviewer: {} },
-          { requestedReviewer: null },
-        ],
-      },
+      ...baseNode, author: { login: 'alice' }, updatedAt: '2026-09-01T00:00:00Z',
     });
     expect(pr.author).toBe('alice');
-    expect(pr.requestedReviewers).toEqual(['jolierabideau']);
+    expect(pr.updatedAt).toBe('2026-09-01T00:00:00Z');
   });
 
-  it('defaults a missing author to unknown and missing requests to none', () => {
-    const pr = mapPullRequest({ ...baseNode, author: null });
-    expect(pr.author).toBe('unknown');
-    expect(pr.requestedReviewers).toEqual([]);
+  it('defaults a missing author to unknown', () => {
+    expect(mapPullRequest({ ...baseNode, author: null }).author).toBe('unknown');
   });
 });
 

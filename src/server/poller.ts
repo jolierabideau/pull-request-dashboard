@@ -58,7 +58,7 @@ const ORDER: Bucket[] = [
 ];
 
 const REVIEW_ORDER: Bucket[] = [
-  'review-needs-you', 'review-waiting-on-author', 'review-approved',
+  'review-needs-you', 'review-waiting-on-author', 'review-approved', 'review-quiet',
 ];
 
 const YOUR_COURT: Set<Bucket> = new Set([
@@ -111,7 +111,7 @@ export function buildBoard(
   const reviewing: BoardItem[] = reviewingPrs
     .filter((pr) => !mine.has(prKey(pr.repo, pr.number)))
     .map((pr) => ({
-      ...classifyReviewing(pr, cfg),
+      ...classifyReviewing(pr, cfg, now),
       ...boardFields(pr, 'reviewer'),
       discordPostedAt: null,
     }));

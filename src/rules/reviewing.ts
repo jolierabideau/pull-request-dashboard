@@ -3,23 +3,40 @@ import { lastActivityOf } from './activity.js';
 import { parseFooter } from './footer.js';
 
 type Reviewing = Extract<
-  Classification['bucket'], 'review-needs-you' | 'review-waiting-on-author' | 'review-approved'
+  Classification['bucket'], 'review-needs-you' | 'review-waiting-on-author' | 'review-approved' | 'review-quiet'
 >;
+
+const DEFAULT_QUIET_AFTER_DAYS = 30;
+const MS_PER_DAY = 86_400_000;
 
 /**
  * Sorts someone else's PR, which `cfg.me` has reviewed or commented on, by whose
- * turn it is. Pure: no I/O, no clock. Rules run in order and the first match
- * wins; each pushes a plain-English receipt.
+ * turn it is. Pure: no I/O, `now` is injected. Rules run in order and the first
+ * match wins; each pushes a plain-English receipt. GitHub review requests are
+ * deliberately not consulted.
  */
-export function classifyReviewing(pr: PrInput, cfg: Config): Classification {
-  const receipts: string[] = pr.isDraft ? ['draft'] : [];
+export function classifyReviewing(pr: PrInput, cfg: Config, now: Date): Classification {
+  const receipts: string[] = [];
   const { author } = pr;
   const me = cfg.me;
 
   const mine = lastActivityOf(pr, me, { commits: false, threads: true });
   const theirs = lastActivityOf(pr, author, { commits: true, threads: true });
 
-  // 1. A Reviewable footer is a snapshot: it decides only while nothing by the
+  // 1. A PR nobody has touched for a long while is out of the way.
+  const quietDays = Math.floor((now.getTime() - Date.parse(pr.updatedAt)) / MS_PER_DAY);
+  if (quietDays > (cfg.quietAfterDays ?? DEFAULT_QUIET_AFTER_DAYS)) {
+    receipts.push(`no activity for ${quietDays} days`);
+    return done('review-quiet', receipts, pr.updatedAt);
+  }
+
+  // 2. Someone else's draft is not ready for review.
+  if (pr.isDraft) {
+    receipts.push('draft — not waiting on you');
+    return done('review-waiting-on-author', receipts, null);
+  }
+
+  // 3. A Reviewable footer is a snapshot: it decides only while nothing by the
   // user or the author postdates the review that carries it.
   const footerReview = newestFooterReview(pr);
   if (footerReview !== null) {
@@ -36,13 +53,7 @@ export function classifyReviewing(pr: PrInput, cfg: Config): Classification {
     }
   }
 
-  // 2. A re-request is GitHub saying the user's review is wanted again.
-  if (pr.requestedReviewers.includes(me)) {
-    receipts.push('your review was re-requested');
-    return done('review-needs-you', receipts, null);
-  }
-
-  // 3. Reviewable approvals survive pushes, so only a comment from the author
+  // 4. Reviewable approvals survive pushes, so only a comment from the author
   // pulls an approval back.
   const myReview = latestSubmittedReview(pr, me);
   if (myReview?.state === 'APPROVED') {
@@ -53,7 +64,7 @@ export function classifyReviewing(pr: PrInput, cfg: Config): Classification {
     }
   }
 
-  // 4. Whoever acted last has handed the ball to the other.
+  // 5. Whoever acted last has handed the ball to the other.
   if (theirs !== null && (mine === null || theirs.at > mine.at)) {
     const verb = theirs.what === 'pushed' ? 'pushed' : 'replied';
     receipts.push(

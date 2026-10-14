@@ -10,5 +10,6 @@
     "github-actions"
   ],
   "pollIntervalMs": 180000,
-  "staleAfterHours": 48
+  "staleAfterHours": 48,
+  "quietAfterDays": 30
 }

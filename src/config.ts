@@ -34,5 +34,9 @@ export function loadConfig(path: string): Config {
   if (parsed.scope !== undefined && parsed.scope !== 'repo' && parsed.scope !== 'org') {
     throw new Error('Config "scope" must be "repo" or "org".');
   }
+  const quiet = parsed.quietAfterDays;
+  if (quiet !== undefined && !(typeof quiet === 'number' && Number.isFinite(quiet) && quiet > 0)) {
+    throw new Error('Config "quietAfterDays" must be a positive number.');
+  }
   return parsed as unknown as Config;
 }

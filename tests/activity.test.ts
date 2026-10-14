@@ -17,7 +17,7 @@ const commit = (over: Partial<CommitInput>): CommitInput => ({
 });
 
 const pr = (over: Partial<PrInput>): PrInput => ({
-  repo: 'paranext/paranext-core', number: 1, title: 't', url: 'u', author: 'jolierabideau', requestedReviewers: [], isDraft: false, headOid: 'abc',
+  repo: 'paranext/paranext-core', number: 1, title: 't', url: 'u', author: 'jolierabideau', updatedAt: '2026-09-10T00:00:00Z', isDraft: false, headOid: 'abc',
   mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
   reviews: [], comments: [], commits: [commit({})], threads: [], checks: [],
   ...over,
