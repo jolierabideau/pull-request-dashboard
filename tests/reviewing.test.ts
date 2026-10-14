@@ -311,6 +311,15 @@ describe('classifyReviewing — last activity', () => {
   });
 });
 
+describe('classifyReviewing — no activity found', () => {
+  it('says so plainly instead of claiming the user acted', () => {
+    const result = classify(pr({ commits: [] }));
+    expect(result.bucket).toBe('review-waiting-on-author');
+    expect(result.receipts).toEqual([`no recent activity found from you or ${ALICE}`]);
+    expect(result.displayTime).toBeNull();
+  });
+});
+
 describe('classifyReviewing — shape', () => {
   it('never escalates and carries no verdict', () => {
     const result = classify(pr({ reviews: [review({})] }));

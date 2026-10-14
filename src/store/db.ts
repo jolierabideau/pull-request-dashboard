@@ -15,9 +15,9 @@ export interface Store {
   getVerdict(reviewId: string, lastEditedAt: string | null): ClaudeVerdict | null;
   putVerdict(reviewId: string, lastEditedAt: string | null, v: ClaudeVerdict): void;
   /**
-   * True only when `key` is notify-worthy, differs from the last key we
-   * OBSERVED for this PR, and the debounce since the last notification that
-   * actually fired has elapsed.
+   * True only when `key` is notify-worthy, the PR has been observed before,
+   * `key` differs from the last key we OBSERVED for it, and the debounce since
+   * the last notification that actually fired has elapsed.
    */
   shouldNotify(pr: string, key: NotifyKey, now: Date): boolean;
   /** Called for every item on every poll, notification or not. */
@@ -78,7 +78,9 @@ export function openStore(path: string, homeRepo: string): Store {
       const row = db.prepare(
         'SELECT last_key, last_notified_at FROM notify_state_v2 WHERE pr_key = ?',
       ).get(pr) as { last_key: string; last_notified_at: string | null } | undefined;
-      if (row === undefined) return true;
+      // A PR seen for the first time is recorded, not announced, so a freshly
+      // tracked board does not fire a burst for everything already waiting.
+      if (row === undefined) return false;
       // The PR has not actually moved since we last looked at it.
       if (row.last_key === key) return false;
       if (row.last_notified_at === null) return true;

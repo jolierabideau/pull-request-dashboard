@@ -82,6 +82,9 @@ const YOUR_COURT: Set<Bucket> = new Set([
   'blocked-mechanically', 'needs-your-response', 'ready-to-merge',
 ]);
 
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 function sortItems(board: Board): void {
   board.items.sort((a, b) => ORDER.indexOf(a.bucket) - ORDER.indexOf(b.bucket));
   board.reviewing.sort(
@@ -185,13 +188,27 @@ export function createPoller(cfg: Config, store: Store): Poller {
     };
 
     try {
-      const [prs, reviewingPrs] = await Promise.all([
+      const [ownResult, reviewingResult] = await Promise.allSettled([
         fetchOpenPrs(cfg), fetchReviewingPrs(cfg),
       ]);
+      // Without the user's own PRs there is no board to build.
+      if (ownResult.status === 'rejected') throw ownResult.reason;
+      const prs = ownResult.value;
       // No branch-to-PR correlation is asserted: the GraphQL query does not
       // fetch headRefName, so there is nothing honest to match branches on.
       const branches = readBranches(cfg.repoPath, new Set<string>());
-      const next = buildBoard(prs, branches, store, cfg, new Date(), reviewingPrs);
+      const next = buildBoard(
+        prs, branches, store, cfg, new Date(),
+        reviewingResult.status === 'fulfilled' ? reviewingResult.value : [],
+      );
+      if (reviewingResult.status === 'rejected') {
+        // The Others' PRs list is kept from the previous board rather than
+        // blanked, and the board says so.
+        next.reviewing = board?.reviewing ?? [];
+        next.error = `Others' PRs not refreshed — ${errorMessage(reviewingResult.reason)}`;
+        sortItems(next);
+        countCourts(next);
+      }
 
       await attachVerdicts(next, prs, store);
       if (superseded()) return;
@@ -200,7 +217,7 @@ export function createPoller(cfg: Config, store: Store): Poller {
       next.epoch = epoch;
       commit(next);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       const staleBoard: Board = board === null
         ? {
             items: [],

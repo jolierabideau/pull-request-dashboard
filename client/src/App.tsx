@@ -126,9 +126,13 @@ export function App() {
   const load = useCallback(async () => {
     try {
       const next = await fetchBoard();
-      showNewNotifications(next);
       setBoard(next);
       setFailed(false);
+      try {
+        showNewNotifications(next).catch(() => {});
+      } catch {
+        // Showing notifications is best-effort; it must never mark a good board as failed.
+      }
     } catch {
       setFailed(true);
     }
@@ -171,6 +175,9 @@ export function App() {
           Showing the last good data{board.error === null ? '' : ` — ${board.error}`}
         </p>
       )}
+
+      {/* A fresh board can still carry a warning, e.g. the Others' PRs list not refreshing. */}
+      {!board.stale && board.error !== null && <p className="banner">{board.error}</p>}
 
       <div role="tablist" aria-label="Pull requests" className="tabs">
         {TABS.map(({ id, label }) => {

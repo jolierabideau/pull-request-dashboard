@@ -104,12 +104,17 @@ to the repo name and has no Posted to Discord button.
 | Bucket | What puts a PR here |
 | --- | --- |
 | **Needs your review** | The newest Reviewable footer names you in "waiting on", or the author pushed or replied after your last review or comment. Renders expanded and counts toward the headline. |
-| **Waiting on author** | A draft (always, whatever else is true), the newest footer names someone else, or you reviewed or commented after the author's last activity (or at the same moment). |
+| **Waiting on author** | A draft (unless it has gone quiet, which wins), the newest footer names someone else, you reviewed or commented after the author's last activity (or at the same moment), or no activity from you or the author could be found (the card says so). |
 | **You approved** | Your newest review is an approval and the author has not commented since. A push after your approval does not pull it back, because Reviewable approvals survive pushes; a comment or thread reply from the author does. |
 | **Gone quiet** | GitHub shows no activity on the PR for more than `quietAfterDays` days (default 30). Collapsed, not counted in the headline, never notifies. |
 
 Rules run in this order and the first match wins: gone quiet, draft, Reviewable footer,
 approved, who acted last. The card's receipts say which one it was.
+
+Both searches (your own PRs, and the PRs you reviewed or commented on) are sorted by most
+recently updated and read the first 50, so on a very busy repo the least recently updated
+PRs can fall off the board. If the Others' PRs search fails while your own succeeds, the
+board keeps the last Others' PRs list and shows a warning instead of going stale.
 
 **Review requests are ignored on purpose.** Being listed as a requested reviewer never
 moves a PR, because many requests are automatic and say nothing about whether you will
@@ -121,7 +126,9 @@ counts while nothing from you or the author is newer than the review carrying it
 your activity and the author's matter: other reviewers are ignored, as are logins in
 `botLogins` (a bot's Reviewable footer is still read). The author's activity is their
 pushes (a bare merge of main does not count), issue comments, review-thread replies and
-reviews; yours is your reviews, issue comments and review-thread replies.
+reviews; yours is your reviews, issue comments and review-thread replies. Only each
+thread's last comment is fetched, so a thread reply counts only while it is the thread's
+latest comment: a later reply by someone else hides it.
 
 The headline counts both tabs: **N in your court** is your own PRs that need you plus the
 reviews waiting on you. Under it, a one-line summary breaks that down ("2 on your PRs · 1
@@ -149,11 +156,13 @@ local to your database, not anything posted to GitHub or Discord for you.
 or "ready to merge", when another person's PR arrives in "needs your review", and when a
 Discord-posted PR goes stale. They are debounced 15
 minutes and only re-fire when a PR actually changes state, so a PR sitting still stays
-quiet. Clicking one opens the PR.
+quiet. A PR that is already in one of those states the first time the dashboard sees it
+does not notify; only a later change does. Clicking one opens the PR.
 
 On every OS, click **Enable notifications** under the headline to get them as browser
 notifications. The server decides when to notify; the open board shows each new one once
-(however many tabs are open), and a board you open fresh shows no backlog. They work
+(however many tabs are open), and a board you open fresh shows no backlog. After the
+server restarts, notifications it fires are shown as usual. They work
 while the tab is in the background or the window minimized, but not once the tab is
 closed. On macOS the server also sends its own `osascript` notification, so enabling the
 browser ones there doubles them up — a Mac user who prefers the native ones simply doesn't

@@ -52,8 +52,14 @@ describe('verdict cache', () => {
 describe('notification dedupe', () => {
   const NOW = new Date('2026-09-11T12:00:00Z');
 
-  it('allows the first notification for a bucket', () => {
-    expect(store().shouldNotify(K, 'needs-your-response', NOW)).toBe(true);
+  it('does not notify for a PR with no recorded state yet', () => {
+    expect(store().shouldNotify(K, 'needs-your-response', NOW)).toBe(false);
+  });
+
+  it('notifies when a PR first seen elsewhere later moves into a notify-worthy key', () => {
+    const s = store();
+    s.recordObserved(K, 'waiting-on-reviewer');
+    expect(s.shouldNotify(K, 'needs-your-response', NOW)).toBe(true);
   });
 
   it('suppresses a repeat of the same bucket', () => {
@@ -152,7 +158,13 @@ describe('PR identity is repo plus number', () => {
     const s = store();
     s.recordNotified(core, 'needs-your-response', NOW);
     expect(s.shouldNotify(core, 'needs-your-response', NOW)).toBe(false);
+    s.recordObserved(studio, 'waiting-on-reviewer');
     expect(s.shouldNotify(studio, 'needs-your-response', NOW)).toBe(true);
+  });
+
+  it('treats repo names case-insensitively', () => {
+    expect(prKey('Paranext/Paranext-Core', 205)).toBe(prKey('paranext/paranext-core', 205));
+    expect(prKey('Paranext/Paranext-Core', 205)).toBe('paranext/paranext-core#205');
   });
 });
 
@@ -204,6 +216,18 @@ describe('legacy table migration', () => {
       }
       expect(tables(path)).not.toContain('discord');
       expect(tables(path)).not.toContain('notify_state');
+    });
+  });
+
+  it('lowercases the home repo in migrated keys', () => {
+    withLegacyDb((path) => {
+      const s = openStore(path, 'Paranext/Paranext-Core');
+      try {
+        expect(s.getDiscordPostedAt('paranext/paranext-core#2795')).toBe('2026-09-11T09:00:00Z');
+        expect(s.getDiscordPostedAt(prKey(HOME, 2795))).toBe('2026-09-11T09:00:00Z');
+      } finally {
+        s.close();
+      }
     });
   });
 

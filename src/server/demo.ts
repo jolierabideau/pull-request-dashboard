@@ -11,6 +11,7 @@ import Fastify from 'fastify';
 import { buildBoard, type Board } from './poller.js';
 import { openStore, type Store } from '../store/db.js';
 import { prKey, repoFromUrl } from '../pr-key.js';
+import { isGithubName, parsePrNumber } from './params.js';
 import type { BranchInput, Config, PrInput } from '../types.js';
 
 /** The PRs captured by scripts/capture-fixtures.ts. */
@@ -88,9 +89,12 @@ export async function serveDemo(port: number): Promise<void> {
   app.post<{ Params: { owner: string; name: string; number: string }; Body: { posted: boolean } }>(
     '/api/pr/:owner/:name/:number/discord',
     async (request, reply) => {
-      const number = Number(request.params.number);
-      if (!Number.isInteger(number)) {
+      const number = parsePrNumber(request.params.number);
+      if (number === null) {
         return reply.code(400).send({ error: 'bad PR number' });
+      }
+      if (!isGithubName(request.params.owner) || !isGithubName(request.params.name)) {
+        return reply.code(400).send({ error: 'bad repo' });
       }
       // Stamped with the pinned clock, not the wall clock, so the receipt
       // ("posted to Discord Nh ago") stays reproducible.

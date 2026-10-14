@@ -74,9 +74,13 @@ export function classifyReviewing(pr: PrInput, cfg: Config, now: Date): Classifi
     );
     return done('review-needs-you', receipts, theirs.at);
   }
-  const verb = mine?.what === 'commented' ? 'commented' : 'reviewed';
+  if (mine === null) {
+    receipts.push(`no recent activity found from you or ${author}`);
+    return done('review-waiting-on-author', receipts, null);
+  }
+  const verb = mine.what === 'commented' ? 'commented' : 'reviewed';
   receipts.push(`you ${verb} after ${author}'s last activity`);
-  return done('review-waiting-on-author', receipts, mine?.at ?? null);
+  return done('review-waiting-on-author', receipts, mine.at);
 }
 
 /** The newest submitted review, by anyone, that carries a Reviewable footer. */

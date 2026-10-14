@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openStore } from '../src/store/db.js';
 import { prKey } from '../src/pr-key.js';
 import type { Config, PrInput } from '../src/types.js';
@@ -29,6 +29,15 @@ function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
   const promise = new Promise<T>((r) => { resolve = r; });
   return { promise, resolve };
 }
+
+// Every test starts from the same defaults, so no mock behaviour leaks between tests.
+beforeEach(() => {
+  mockFetchOpenPrs.mockReset();
+  mockFetchOpenPrs.mockResolvedValue([]);
+  mockFetchReviewingPrs.mockReset();
+  mockFetchReviewingPrs.mockResolvedValue([]);
+  mockNotify.mockReset();
+});
 
 const HOME = 'paranext/paranext-core';
 const cfg: Config = {
@@ -202,21 +211,25 @@ describe('notifications', () => {
 
   afterEach(() => { vi.useRealTimers(); });
 
-  // Monday it notifies, you reply, Friday the reviewer comes back. Before the
-  // observed key was recorded every poll, Friday was silent forever.
-  it('notifies again when a PR returns to your court after a round trip', async () => {
-    mockFetchOpenPrs.mockReset();
-    mockNotify.mockReset();
+  // A PR is recorded, not announced, the first time it is seen, so a board
+  // that starts with PRs already in your court is quiet. Monday it notifies on
+  // arrival, you reply, Friday the reviewer comes back.
+  it('notifies when a PR arrives in your court, and again after a round trip', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-11T12:00:00Z'));
 
     const poller = createPoller(cfg, store());
 
+    mockFetchOpenPrs.mockResolvedValue([inTheirCourt]);
+    await poller.refresh();
+    expect(mockNotify).not.toHaveBeenCalled();
+
+    vi.setSystemTime(new Date('2026-09-11T13:00:00Z'));
     mockFetchOpenPrs.mockResolvedValue([inMyCourt]);
     await poller.refresh();
     expect(mockNotify).toHaveBeenCalledTimes(1);
 
-    vi.setSystemTime(new Date('2026-09-11T13:00:00Z'));
+    vi.setSystemTime(new Date('2026-09-11T14:00:00Z'));
     mockFetchOpenPrs.mockResolvedValue([inTheirCourt]);
     await poller.refresh();
     expect(mockNotify).toHaveBeenCalledTimes(1);
@@ -227,13 +240,27 @@ describe('notifications', () => {
     expect(mockNotify).toHaveBeenCalledTimes(2);
   });
 
-  it('stays quiet while a PR sits in the same bucket poll after poll', async () => {
-    mockFetchOpenPrs.mockReset();
-    mockNotify.mockReset();
+  it('does not notify for a PR already in your court when first seen', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-11T12:00:00Z'));
 
     const poller = createPoller(cfg, store());
+    mockFetchOpenPrs.mockResolvedValue([inMyCourt]);
+    await poller.refresh();
+    vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
+    await poller.refresh();
+
+    expect(mockNotify).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet while a PR sits in the same bucket poll after poll', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-11T12:00:00Z'));
+
+    const poller = createPoller(cfg, store());
+    mockFetchOpenPrs.mockResolvedValue([inTheirCourt]);
+    await poller.refresh();
+    vi.setSystemTime(new Date('2026-09-12T12:00:00Z'));
     mockFetchOpenPrs.mockResolvedValue([inMyCourt]);
     await poller.refresh();
     vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
@@ -356,10 +383,13 @@ describe("Claude's verdict", () => {
   it('titles notifications with the repo name', async () => {
     mockFetchOpenPrs.mockReset();
     mockNotify.mockReset();
-    mockFetchOpenPrs.mockResolvedValue([
-      pr({ repo: 'paranext/paratext-10-studio', number: 202, mergeStateStatus: 'DIRTY' }),
-    ]);
-    await createPoller(cfg, openStore(':memory:', HOME)).refresh();
+    const studioPr = (mergeStateStatus: string) =>
+      pr({ repo: 'paranext/paratext-10-studio', number: 202, mergeStateStatus });
+    const poller = createPoller(cfg, openStore(':memory:', HOME));
+    mockFetchOpenPrs.mockResolvedValueOnce([studioPr('CLEAN')]);
+    await poller.refresh();
+    mockFetchOpenPrs.mockResolvedValueOnce([studioPr('DIRTY')]);
+    await poller.refresh();
     expect(mockNotify.mock.calls[0]?.[0]).toBe('paratext-10-studio #202');
   });
 
@@ -445,30 +475,28 @@ describe('reviewing PRs', () => {
   });
 
   it('does not notify for a quiet PR', async () => {
-    mockFetchOpenPrs.mockReset();
-    mockNotify.mockReset();
-    mockFetchReviewingPrs.mockReset();
-    mockFetchOpenPrs.mockResolvedValue([]);
     mockFetchReviewingPrs.mockResolvedValue([
       theirPr({ number: 14, updatedAt: '2020-01-01T00:00:00Z' }),
     ]);
     await createPoller(cfg, store()).refresh();
     expect(mockNotify).not.toHaveBeenCalled();
-    mockFetchReviewingPrs.mockReset();
-    mockFetchReviewingPrs.mockResolvedValue([]);
   });
 
-  it('notifies once for a review waiting on you, titled with the repo name', async () => {
-    mockFetchOpenPrs.mockReset();
-    mockNotify.mockReset();
-    mockFetchReviewingPrs.mockReset();
-    mockFetchOpenPrs.mockResolvedValue([]);
-    mockFetchReviewingPrs.mockResolvedValue([
-      theirPr({ number: 10, repo: 'paranext/paratext-10-studio', title: 'Add thing' }),
-      waiting,
-    ]);
-
+  it('notifies once for a review that arrives waiting on you, titled with the repo name', async () => {
+    const studio = 'paranext/paratext-10-studio';
     const poller = createPoller(cfg, store());
+
+    // First seen with the user's review newest: the ball is with the author.
+    mockFetchReviewingPrs.mockResolvedValue([
+      theirPr({ number: 10, repo: studio, title: 'Add thing', reviews: [myReview] }), waiting,
+    ]);
+    await poller.refresh();
+    expect(mockNotify).not.toHaveBeenCalled();
+
+    // The author then acts, which hands the review back to the user.
+    mockFetchReviewingPrs.mockResolvedValue([
+      theirPr({ number: 10, repo: studio, title: 'Add thing' }), waiting,
+    ]);
     await poller.refresh();
     await poller.refresh();
 
@@ -477,42 +505,74 @@ describe('reviewing PRs', () => {
     expect(mockNotify.mock.calls[0]?.[1]).toBe('review needed: Add thing');
     expect(poller.snapshot()?.reviewCourtCount).toBe(1);
     expect(poller.snapshot()?.yourCourtCount).toBe(1);
-    mockFetchReviewingPrs.mockReset();
-    mockFetchReviewingPrs.mockResolvedValue([]);
   });
 
-  it('fails the poll when the reviewing fetch fails, keeping the last good board', async () => {
-    mockFetchOpenPrs.mockReset();
-    mockNotify.mockReset();
-    mockFetchReviewingPrs.mockReset();
-    mockFetchOpenPrs.mockResolvedValue([]);
+  it('keeps own PRs fresh and the previous Others\' PRs when only the reviewing fetch fails', async () => {
     mockFetchReviewingPrs.mockResolvedValueOnce([needsYou]);
     const poller = createPoller(cfg, store());
     await poller.refresh();
+
+    mockFetchOpenPrs.mockResolvedValue([pr({ number: 1, mergeStateStatus: 'DIRTY' })]);
     mockFetchReviewingPrs.mockRejectedValueOnce(new Error('boom'));
+    await poller.refresh();
+
+    const board = poller.snapshot();
+    expect(board?.stale).toBe(false);
+    expect(board?.error).toBe("Others' PRs not refreshed — boom");
+    expect(board?.items.map((i) => i.number)).toEqual([1]);
+    expect(board?.reviewing.map((i) => i.number)).toEqual([10]);
+    expect(board?.myCourtCount).toBe(1);
+    expect(board?.reviewCourtCount).toBe(1);
+    expect(board?.yourCourtCount).toBe(2);
+  });
+
+  it('shows an empty Others\' PRs list with a warning when it fails on the first poll', async () => {
+    mockFetchOpenPrs.mockResolvedValue([pr({ number: 1 })]);
+    mockFetchReviewingPrs.mockRejectedValueOnce(new Error('boom'));
+    const poller = createPoller(cfg, store());
+    await poller.refresh();
+
+    const board = poller.snapshot();
+    expect(board?.stale).toBe(false);
+    expect(board?.error).toContain('boom');
+    expect(board?.reviewing).toEqual([]);
+    expect(board?.items).toHaveLength(1);
+  });
+
+  it('goes stale and keeps the last good board when the own PRs fetch fails', async () => {
+    mockFetchReviewingPrs.mockResolvedValueOnce([needsYou]);
+    const poller = createPoller(cfg, store());
+    await poller.refresh();
+    mockFetchOpenPrs.mockRejectedValueOnce(new Error('boom'));
     await poller.refresh();
 
     const board = poller.snapshot();
     expect(board?.stale).toBe(true);
     expect(board?.error).toBe('boom');
     expect(board?.reviewing).toHaveLength(1);
-    mockFetchReviewingPrs.mockReset();
-    mockFetchReviewingPrs.mockResolvedValue([]);
+  });
+
+  it('puts a clean refresh after a reviewing failure back to no error', async () => {
+    const poller = createPoller(cfg, store());
+    mockFetchReviewingPrs.mockRejectedValueOnce(new Error('boom'));
+    await poller.refresh();
+    await poller.refresh();
+    expect(poller.snapshot()?.error).toBeNull();
   });
 });
 
 describe('notification event log', () => {
   const blocked = (number: number) => pr({ number, mergeStateStatus: 'DIRTY' });
-  const fresh = () => {
-    mockFetchOpenPrs.mockReset();
-    mockNotify.mockReset();
-    mockFetchReviewingPrs.mockReset();
-    mockFetchReviewingPrs.mockResolvedValue([]);
-    return createPoller(cfg, openStore(':memory:', HOME));
+  const fresh = () => createPoller(cfg, openStore(':memory:', HOME));
+  /** Lets the poller see the PRs in a calm state, so a later change is a transition. */
+  const observeCalm = async (poller: ReturnType<typeof fresh>, numbers: number[]) => {
+    mockFetchOpenPrs.mockResolvedValueOnce(numbers.map((number) => pr({ number })));
+    await poller.refresh();
   };
 
   it('records an event with title, body and url when a notification fires', async () => {
     const poller = fresh();
+    await observeCalm(poller, [3]);
     mockFetchOpenPrs.mockResolvedValue([{ ...blocked(3), url: 'https://example.test/3', title: 'Fix' }]);
     await poller.refresh();
 
@@ -536,6 +596,7 @@ describe('notification event log', () => {
 
   it('does not record the same state twice', async () => {
     const poller = fresh();
+    await observeCalm(poller, [3]);
     mockFetchOpenPrs.mockResolvedValue([blocked(3)]);
     await poller.refresh();
     await poller.refresh();
@@ -544,6 +605,7 @@ describe('notification event log', () => {
 
   it('numbers events upward and keeps only the last 50', async () => {
     const poller = fresh();
+    await observeCalm(poller, Array.from({ length: 60 }, (_, i) => i + 1));
     mockFetchOpenPrs.mockResolvedValue(Array.from({ length: 60 }, (_, i) => blocked(i + 1)));
     await poller.refresh();
 
@@ -554,6 +616,7 @@ describe('notification event log', () => {
 
   it('keeps the log on a stale board after a failed poll', async () => {
     const poller = fresh();
+    await observeCalm(poller, [3]);
     mockFetchOpenPrs.mockResolvedValueOnce([blocked(3)]);
     await poller.refresh();
     mockFetchOpenPrs.mockRejectedValueOnce(new Error('boom'));

@@ -1,5 +1,8 @@
-/** A PR is identified by its repo plus its number: two repos can both have a #205. */
-export const prKey = (repo: string, number: number): string => `${repo}#${number}`;
+/**
+ * A PR is identified by its repo plus its number: two repos can both have a #205.
+ * GitHub repo names are case-insensitive, so the repo part is lowercased.
+ */
+export const prKey = (repo: string, number: number): string => `${repo.toLowerCase()}#${number}`;
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+/;
 

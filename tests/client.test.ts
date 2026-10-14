@@ -142,7 +142,7 @@ describe('fetchReviewingPrs', () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
       const { q } = (JSON.parse(init.body) as { variables: { q: string } }).variables;
       queries.push(q);
-      const key = Object.keys(answers).find((k) => q.endsWith(k));
+      const key = Object.keys(answers).find((k) => q.includes(k));
       return new Response(
         JSON.stringify({ data: { search: { nodes: answers[key ?? ''] ?? [] } } }),
         { status: 200 },
@@ -157,9 +157,20 @@ describe('fetchReviewingPrs', () => {
     const queries = stubSearch({});
     await fetchReviewingPrs(cfg);
     expect(queries.sort()).toEqual([
-      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau commenter:jolierabideau',
-      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau reviewed-by:jolierabideau',
+      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau commenter:jolierabideau sort:updated-desc',
+      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau reviewed-by:jolierabideau sort:updated-desc',
     ]);
+  });
+
+  it('fails when one of the two searches fails', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response('boom', { status: 500, statusText: 'Server Error' })
+        : new Response(JSON.stringify({ data: { search: { nodes: [] } } }), { status: 200 });
+    }));
+    await expect(fetchReviewingPrs(cfg)).rejects.toThrow(/500/);
   });
 
   it('searches the whole org when scope is org', async () => {
@@ -200,11 +211,11 @@ describe('fetchOpenPrs — search scope', () => {
 
   it('searches the one repo by default', async () => {
     expect(await searchedQuery(cfg))
-      .toBe('repo:paranext/paranext-core is:pr is:open author:jolierabideau');
+      .toBe('repo:paranext/paranext-core is:pr is:open author:jolierabideau sort:updated-desc');
   });
 
   it('searches the whole org when scope is org', async () => {
     expect(await searchedQuery({ ...cfg, scope: 'org' }))
-      .toBe('org:paranext is:pr is:open author:jolierabideau');
+      .toBe('org:paranext is:pr is:open author:jolierabideau sort:updated-desc');
   });
 });

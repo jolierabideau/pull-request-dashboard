@@ -7,11 +7,11 @@ const PR_FIELDS = `
   updatedAt
   mergeable
   mergeStateStatus
-  reviews(first: 100) {
+  reviews(last: 100) {
     nodes { id state submittedAt bodyText lastEditedAt author { login } }
   }
-  comments(first: 100) { nodes { createdAt author { login } } }
-  reviewThreads(first: 100) {
+  comments(last: 100) { nodes { createdAt author { login } } }
+  reviewThreads(last: 100) {
     nodes {
       isResolved
       comments(last: 1) { nodes { createdAt author { login } } }
