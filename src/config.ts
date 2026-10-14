@@ -31,5 +31,8 @@ export function loadConfig(path: string): Config {
   if ((parsed.pollIntervalMs as number) < 30_000) {
     throw new Error('Config "pollIntervalMs" must be at least 30000 (30s).');
   }
+  if (parsed.scope !== undefined && parsed.scope !== 'repo' && parsed.scope !== 'org') {
+    throw new Error('Config "scope" must be "repo" or "org".');
+  }
   return parsed as unknown as Config;
 }

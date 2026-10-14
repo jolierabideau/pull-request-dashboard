@@ -2,6 +2,7 @@
   "repoPath": "<absolute path to your paranext-core clone>",
   "owner": "paranext",
   "name": "paranext-core",
+  "scope": "repo",
   "me": "<your-github-login>",
   "botLogins": [
     "devin-ai-integration",

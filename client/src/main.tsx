@@ -14,6 +14,7 @@ style.textContent = `
   .card-head a { color: inherit; text-decoration: none; font-weight: 600; flex: 1; }
   .card-head a:hover { text-decoration: underline; }
   .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .repo { color: #8a867f; font-weight: 400; }
   .age { color: #8a867f; font-variant-numeric: tabular-nums; }
   .receipts, .asks { margin: 8px 0 0; padding-left: 18px; color: #6b6862; font-size: 13px; }
   .asks { color: #1c1b19; }

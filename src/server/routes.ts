@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { Poller } from './poller.js';
 import type { Store } from '../store/db.js';
+import { prKey } from '../pr-key.js';
+
+const GITHUB_NAME = /^[A-Za-z0-9_.-]+$/;
 
 export function registerRoutes(
   app: FastifyInstance, poller: Poller, store: Store,
@@ -16,15 +19,19 @@ export function registerRoutes(
     return reply.send(board);
   });
 
-  app.post<{ Params: { number: string }; Body: { posted: boolean } }>(
-    '/api/pr/:number/discord',
+  app.post<{ Params: { owner: string; name: string; number: string }; Body: { posted: boolean } }>(
+    '/api/pr/:owner/:name/:number/discord',
     async (request, reply) => {
+      const { owner, name } = request.params;
       const number = Number(request.params.number);
       if (!Number.isInteger(number)) {
         return reply.code(400).send({ error: 'bad PR number' });
       }
+      if (!GITHUB_NAME.test(owner) || !GITHUB_NAME.test(name)) {
+        return reply.code(400).send({ error: 'bad repo' });
+      }
       store.setDiscordPostedAt(
-        number,
+        prKey(`${owner}/${name}`, number),
         request.body?.posted === false ? null : new Date().toISOString(),
       );
       await poller.refresh();

@@ -22,6 +22,19 @@ describe('loadConfig', () => {
     expect(loadConfig(write(valid))).toEqual(valid);
   });
 
+  it('leaves scope unset when the config omits it', () => {
+    expect(loadConfig(write(valid)).scope).toBeUndefined();
+  });
+
+  it.each(['repo', 'org'])('accepts scope "%s"', (scope) => {
+    expect(loadConfig(write({ ...valid, scope })).scope).toBe(scope);
+  });
+
+  it('rejects an unknown scope, naming the field', () => {
+    expect(() => loadConfig(write({ ...valid, scope: 'everything' })))
+      .toThrow(/scope/);
+  });
+
   it('names the missing field', () => {
     const { me, ...rest } = valid;
     expect(() => loadConfig(write(rest))).toThrow(/me/);

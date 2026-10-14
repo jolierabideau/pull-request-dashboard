@@ -1,11 +1,13 @@
 import type { CheckContext, Config, PrInput } from '../types.js';
 import { clearTokenCache, getToken } from './token.js';
 import { LIST_QUERY } from './query.js';
+import { repoFromUrl } from '../pr-key.js';
 
 interface GqlNode { [key: string]: any }
 
 export function mapPullRequest(node: GqlNode): PrInput {
   return {
+    repo: repoFromUrl(node.url),
     number: node.number,
     title: node.title,
     url: node.url,
@@ -76,7 +78,8 @@ function mapStatusContext(c: GqlNode): CheckContext {
 }
 
 export async function fetchOpenPrs(cfg: Config): Promise<PrInput[]> {
-  const q = `repo:${cfg.owner}/${cfg.name} is:pr is:open author:${cfg.me}`;
+  const where = cfg.scope === 'org' ? `org:${cfg.owner}` : `repo:${cfg.owner}/${cfg.name}`;
+  const q = `${where} is:pr is:open author:${cfg.me}`;
   const data = await graphql<{ search: { nodes: GqlNode[] } }>(LIST_QUERY, { q });
   return data.search.nodes.filter((n) => n.number !== undefined).map(mapPullRequest);
 }

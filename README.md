@@ -51,7 +51,7 @@ the real board (`npm run dev`).
 | --- | --- |
 | **Node 22+** | Needed even for the demo: `npm install` builds the `better-sqlite3` native module, and an older Node fails at that step. |
 | **GitHub CLI, logged in** | The server reads your token from `gh auth token` at startup. Run `gh auth login` first. No token is ever stored in this repo. |
-| **A local clone of the repo you're tracking** | The branch list reads it with `git -C`. Nothing is written to it. |
+| **A local clone of your home repo** | The branch list reads it with `git -C`. Nothing is written to it. |
 | **`ANTHROPIC_API_KEY`** | Optional. Used only to break ties on ambiguous reviews — see [Review escalation](#review-escalation). |
 | **macOS, for notifications** | The board itself works everywhere; desktop notifications don't. See [Known limits](#known-limits). |
 
@@ -118,12 +118,13 @@ behind a banner saying so, and keeps retrying every 30s rather than blanking out
 
 ## Configuration
 
-`config.json` is gitignored, so your copy stays yours. Every field is required.
+`config.json` is gitignored, so your copy stays yours. Every field is required except `scope`.
 
 | Field | Meaning |
 | --- | --- |
-| `repoPath` | Absolute path to your local clone. Used for the branch list. |
-| `owner` / `name` | The GitHub repo to poll, e.g. `paranext` / `paranext-core`. |
+| `repoPath` | Absolute path to your local clone of the home repo. Used for the branch list. |
+| `owner` / `name` | Your home repo, e.g. `paranext` / `paranext-core`. With the default scope this is the only repo polled. |
+| `scope` | Optional. `"repo"` (the default) tracks your PRs in `owner`/`name` only; `"org"` tracks your open PRs in every repo of `owner`. |
 | `me` | **Your** GitHub login. This is what "your court" is measured against. |
 | `botLogins` | Logins whose reviews and comments don't count as human activity. |
 | `pollIntervalMs` | How often to poll GitHub. Minimum 30000; 180000 (3 min) is the default. |
@@ -132,6 +133,12 @@ behind a banner saying so, and keeps retrying every 30s rather than blanking out
 The example file ships with placeholders in angle brackets for the two fields that
 must be yours. The server refuses to start while any placeholder is left in place, and
 refuses to start if `repoPath` doesn't exist — both produce a message naming the field.
+
+With `"scope": "org"`, every card carries a small muted label with its repo name
+(`paratext-10-studio #202 …`) — shown on every card, in either scope — and notifications
+are titled the same way. A PR is identified by repo plus number, so two repos that both
+have a #205 stay separate, including their Discord stamps and notification state. The
+branch list still covers only the home repo's clone at `repoPath`.
 
 Environment overrides, all optional:
 
@@ -209,3 +216,5 @@ an authenticated `gh`.
 - **`gh` is required at startup.** If it's missing or logged out, the server exits
   with an actionable message rather than running blind. Demo mode doesn't need it.
 - **Branches aren't matched to PRs.** See [The buckets](#the-buckets).
+- **The branch list is home-repo only.** With `"scope": "org"` the PRs span the org, but the
+  branches still come from the single clone at `repoPath`.

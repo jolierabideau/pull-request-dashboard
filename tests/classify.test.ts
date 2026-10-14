@@ -11,7 +11,7 @@ const NOW = new Date('2026-09-11T12:00:00Z');
 const none: LocalState = { discordPostedAt: null };
 
 const pr = (over: Partial<PrInput>): PrInput => ({
-  number: 1, title: 't', url: 'u', isDraft: false, headOid: 'abc',
+  repo: 'paranext/paranext-core', number: 1, title: 't', url: 'u', isDraft: false, headOid: 'abc',
   mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
   reviews: [], comments: [],
   commits: [{

@@ -45,6 +45,8 @@ export interface CheckContext {
 }
 
 export interface PrInput {
+  /** The `owner/name` the PR lives in. Together with `number` it identifies the PR. */
+  repo: string;
   number: number;
   title: string;
   url: string;
@@ -100,10 +102,16 @@ export interface Classification {
   verdict: ClaudeVerdict | null;
 }
 
+export type Scope = 'repo' | 'org';
+
 export interface Config {
+  /** The home repo's local clone; the branch list reads it. */
   repoPath: string;
+  /** Owner of the home repo; also the org searched when `scope` is 'org'. */
   owner: string;
   name: string;
+  /** 'repo' tracks only owner/name; 'org' tracks every repo of `owner`. Defaults to 'repo'. */
+  scope?: Scope;
   me: string;
   botLogins: string[];
   pollIntervalMs: number;

@@ -4,6 +4,7 @@ import { resolveEscalation } from '../claude/escalate.js';
 import { fetchOpenPrs } from '../github/client.js';
 import { readBranches } from '../git/branches.js';
 import { notifyKey } from '../rules/notify.js';
+import { prKey } from '../pr-key.js';
 import { notify } from '../notify/osascript.js';
 import type { Store } from '../store/db.js';
 import type {
@@ -11,6 +12,8 @@ import type {
 } from '../types.js';
 
 export interface BoardItem extends Classification {
+  /** `owner/name` of the PR's repo; with `number` it identifies the PR. */
+  repo: string;
   number: number;
   title: string;
   url: string;
@@ -53,10 +56,11 @@ export function buildBoard(
   now: Date,
 ): Board {
   const items: BoardItem[] = prs.map((pr) => {
-    const local = { discordPostedAt: store.getDiscordPostedAt(pr.number) };
+    const local = { discordPostedAt: store.getDiscordPostedAt(prKey(pr.repo, pr.number)) };
     const classification = classify(pr, local, cfg, now);
     return {
       ...classification,
+      repo: pr.repo,
       number: pr.number,
       title: pr.title,
       url: pr.url,
@@ -150,7 +154,7 @@ async function attachVerdicts(
 ): Promise<void> {
   for (const item of board.items) {
     if (item.escalate === null || item.escalateReviewId === null) continue;
-    const pr = prs.find((p) => p.number === item.number);
+    const pr = prs.find((p) => prKey(p.repo, p.number) === prKey(item.repo, item.number));
     // Resolve the exact review classify escalated on, not merely the newest.
     const review = pr?.reviews.find((r) => r.id === item.escalateReviewId);
     if (!review) continue;
@@ -181,13 +185,15 @@ function sendNotifications(board: Board, store: Store, cfg: Config): void {
   const now = new Date();
   for (const item of board.items) {
     const key = notifyKey(item, cfg, now);
-    if (store.shouldNotify(item.number, key, now)) {
-      notify(`PR #${item.number}`, `${key}: ${item.title}`, item.url);
-      store.recordNotified(item.number, key, now);
+    const id = prKey(item.repo, item.number);
+    if (store.shouldNotify(id, key, now)) {
+      const repoName = item.repo.split('/')[1] ?? item.repo;
+      notify(`${repoName} #${item.number}`, `${key}: ${item.title}`, item.url);
+      store.recordNotified(id, key, now);
       continue;
     }
     // Record what we saw even when nothing fired, so leaving and re-entering
     // a notify-worthy key notifies again.
-    store.recordObserved(item.number, key);
+    store.recordObserved(id, key);
   }
 }

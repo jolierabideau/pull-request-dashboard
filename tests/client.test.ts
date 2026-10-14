@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { mapPullRequest } from '../src/github/client.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchOpenPrs, mapPullRequest } from '../src/github/client.js';
+import type { Config } from '../src/types.js';
 import { checkDot } from '../src/rules/checks.js';
 
 const baseNode = {
   number: 1,
   title: 't',
-  url: 'u',
+  url: 'https://github.com/paranext/paranext-core/pull/1',
   isDraft: false,
   mergeable: 'MERGEABLE',
   mergeStateStatus: 'CLEAN',
@@ -95,5 +96,47 @@ describe('mapPullRequest — StatusContext mapping', () => {
     expect(pr.checks).toEqual([
       { name: 'build', status: 'IN_PROGRESS', conclusion: null },
     ]);
+  });
+});
+
+describe('mapPullRequest — repo identity', () => {
+  it('derives the repo from the PR url', () => {
+    const pr = mapPullRequest({
+      ...baseNode, url: 'https://github.com/paranext/paratext-10-studio/pull/202',
+    });
+    expect(pr.repo).toBe('paranext/paratext-10-studio');
+  });
+
+  it('throws when the url does not name a repo', () => {
+    expect(() => mapPullRequest({ ...baseNode, url: 'u' })).toThrow(/which repo/);
+  });
+});
+
+describe('fetchOpenPrs — search scope', () => {
+  const cfg: Config = {
+    repoPath: '/tmp', owner: 'paranext', name: 'paranext-core',
+    me: 'jolierabideau', botLogins: [], pollIntervalMs: 180000, staleAfterHours: 48,
+  };
+
+  const searchedQuery = async (config: Config): Promise<string> => {
+    const fetchMock = vi.fn(async (_url: string, _init: { body: string }) => new Response(
+      JSON.stringify({ data: { search: { nodes: [] } } }), { status: 200 },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchOpenPrs(config);
+    const init = fetchMock.mock.calls[0]?.[1];
+    return (JSON.parse(init?.body ?? '{}') as { variables: { q: string } }).variables.q;
+  };
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('searches the one repo by default', async () => {
+    expect(await searchedQuery(cfg))
+      .toBe('repo:paranext/paranext-core is:pr is:open author:jolierabideau');
+  });
+
+  it('searches the whole org when scope is org', async () => {
+    expect(await searchedQuery({ ...cfg, scope: 'org' }))
+      .toBe('org:paranext is:pr is:open author:jolierabideau');
   });
 });

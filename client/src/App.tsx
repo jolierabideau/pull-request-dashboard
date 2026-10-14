@@ -67,7 +67,7 @@ export function App() {
               <ul className="cards">
                 {items.map((item) => (
                   <Card
-                    key={item.number}
+                    key={`${item.repo}#${item.number}`}
                     item={item}
                     now={asOf}
                     onChange={() => void load()}
@@ -80,7 +80,7 @@ export function App() {
                 <ul className="cards">
                   {items.map((item) => (
                     <Card
-                      key={item.number}
+                      key={`${item.repo}#${item.number}`}
                       item={item}
                       now={asOf}
                       onChange={() => void load()}

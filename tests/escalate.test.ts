@@ -56,7 +56,7 @@ describe('parseVerdict', () => {
 
 describe('resolveEscalation', () => {
   it('calls the model on a miss and caches the result', async () => {
-    const store = openStore(':memory:');
+    const store = openStore(':memory:', 'paranext/paranext-core');
     const ask = vi.fn().mockResolvedValue(verdict);
 
     expect(await resolveEscalation(review, 'commented-no-footer', store, ask))
@@ -67,7 +67,7 @@ describe('resolveEscalation', () => {
   });
 
   it('re-asks when the review has been edited since caching', async () => {
-    const store = openStore(':memory:');
+    const store = openStore(':memory:', 'paranext/paranext-core');
     const ask = vi.fn().mockResolvedValue(verdict);
 
     await resolveEscalation(review, 'commented-no-footer', store, ask);
@@ -79,7 +79,7 @@ describe('resolveEscalation', () => {
   });
 
   it('returns null rather than throwing when the model call fails', async () => {
-    const store = openStore(':memory:');
+    const store = openStore(':memory:', 'paranext/paranext-core');
     const ask = vi.fn().mockRejectedValue(new Error('no credentials'));
 
     expect(await resolveEscalation(review, 'commented-no-footer', store, ask))
@@ -87,7 +87,7 @@ describe('resolveEscalation', () => {
   });
 
   it('returns null and does not cache when the model returns a malformed payload', async () => {
-    const store = openStore(':memory:');
+    const store = openStore(':memory:', 'paranext/paranext-core');
     const badAsk = vi.fn().mockResolvedValue({ court: 'nobody' });
 
     expect(await resolveEscalation(review, 'commented-no-footer', store, badAsk))

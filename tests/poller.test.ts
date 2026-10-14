@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openStore } from '../src/store/db.js';
+import { prKey } from '../src/pr-key.js';
 import type { Config, PrInput } from '../src/types.js';
 
 const { mockFetchOpenPrs } = vi.hoisted(() => ({ mockFetchOpenPrs: vi.fn() }));
@@ -25,6 +26,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
   return { promise, resolve };
 }
 
+const HOME = 'paranext/paranext-core';
 const cfg: Config = {
   repoPath: '/tmp', owner: 'paranext', name: 'paranext-core',
   me: 'jolierabideau', botLogins: ['devin-ai-integration'],
@@ -33,7 +35,7 @@ const cfg: Config = {
 const NOW = new Date('2026-09-11T12:00:00Z');
 
 const pr = (over: Partial<PrInput>): PrInput => ({
-  number: 1, title: 't', url: 'u', isDraft: false, headOid: 'abc',
+  repo: HOME, number: 1, title: 't', url: 'u', isDraft: false, headOid: 'abc',
   mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
   reviews: [], comments: [],
   commits: [{
@@ -48,7 +50,7 @@ describe('buildBoard', () => {
   it('orders buckets by priority, most urgent first', () => {
     const board = buildBoard(
       [pr({ number: 1 }), pr({ number: 2, mergeStateStatus: 'DIRTY' })],
-      [], openStore(':memory:'), cfg, NOW,
+      [], openStore(':memory:', HOME), cfg, NOW,
     );
     expect(board.items[0]?.number).toBe(2);
   });
@@ -56,14 +58,14 @@ describe('buildBoard', () => {
   it('counts only items in the user court', () => {
     const board = buildBoard(
       [pr({ number: 2, mergeStateStatus: 'DIRTY' }), pr({ number: 1 })],
-      [], openStore(':memory:'), cfg, NOW,
+      [], openStore(':memory:', HOME), cfg, NOW,
     );
     expect(board.yourCourtCount).toBe(1);
   });
 
   it('applies the stored Discord timestamp', () => {
-    const store = openStore(':memory:');
-    store.setDiscordPostedAt(1, '2026-09-11T09:00:00Z');
+    const store = openStore(':memory:', HOME);
+    store.setDiscordPostedAt(prKey(HOME, 1), '2026-09-11T09:00:00Z');
     const board = buildBoard([pr({ number: 1 })], [], store, cfg, NOW);
     expect(board.items[0]?.bucket).toBe('asked-no-looks');
   });
@@ -71,13 +73,32 @@ describe('buildBoard', () => {
   it('carries branches through as their own items', () => {
     const board = buildBoard(
       [], [{ name: 'adr-slugs', upstreamGone: true, aheadOfMain: 0, prNumber: null }],
-      openStore(':memory:'), cfg, NOW,
+      openStore(':memory:', HOME), cfg, NOW,
     );
     expect(board.branches[0]?.bucket).toBe('dead-branch');
   });
 
+  it('keeps two PRs that share a number in different repos apart', () => {
+    const store = openStore(':memory:', HOME);
+    store.setDiscordPostedAt(prKey('paranext/paratext-10-studio', 205), '2026-09-11T09:00:00Z');
+    const board = buildBoard(
+      [
+        pr({ repo: HOME, number: 205 }),
+        pr({ repo: 'paranext/paratext-10-studio', number: 205 }),
+      ],
+      [], store, cfg, NOW,
+    );
+    expect(board.items).toHaveLength(2);
+    const core = board.items.find((i) => i.repo === HOME);
+    const studio = board.items.find((i) => i.repo === 'paranext/paratext-10-studio');
+    expect(core?.discordPostedAt).toBeNull();
+    expect(core?.bucket).toBe('not-asked');
+    expect(studio?.discordPostedAt).toBe('2026-09-11T09:00:00Z');
+    expect(studio?.bucket).toBe('asked-no-looks');
+  });
+
   it('stamps the board with when it was built', () => {
-    const board = buildBoard([], [], openStore(':memory:'), cfg, NOW);
+    const board = buildBoard([], [], openStore(':memory:', HOME), cfg, NOW);
     expect(board.fetchedAt).toBe(NOW.toISOString());
   });
 });
@@ -91,7 +112,7 @@ describe('createPoller', () => {
     mockFetchOpenPrs.mockImplementationOnce(() => slow.promise);
     mockFetchOpenPrs.mockImplementationOnce(() => fast.promise);
 
-    const poller = createPoller(cfg, openStore(':memory:'));
+    const poller = createPoller(cfg, openStore(':memory:', HOME));
     const firstRefresh = poller.refresh();
     const secondRefresh = poller.refresh();
 
@@ -113,7 +134,7 @@ describe('createPoller', () => {
     const inFlight = deferred<PrInput[]>();
     mockFetchOpenPrs.mockImplementationOnce(() => inFlight.promise);
 
-    const poller = createPoller(cfg, openStore(':memory:'));
+    const poller = createPoller(cfg, openStore(':memory:', HOME));
     const refreshing = poller.refresh();
     poller.stop();
     inFlight.resolve([pr({ number: 1 })]);
@@ -130,7 +151,7 @@ describe('createPoller', () => {
     mockFetchOpenPrs.mockImplementationOnce(() => slow.promise);
     mockFetchOpenPrs.mockImplementationOnce(() => fast.promise);
 
-    const poller = createPoller(cfg, openStore(':memory:'));
+    const poller = createPoller(cfg, openStore(':memory:', HOME));
     const firstRefresh = poller.refresh();
     const secondRefresh = poller.refresh();
 
@@ -149,7 +170,7 @@ describe('createPoller', () => {
 
 
 describe('notifications', () => {
-  const store = () => openStore(':memory:');
+  const store = () => openStore(':memory:', HOME);
 
   /** katherinejensen00's footer hands the ball to the user. */
   const inMyCourt = pr({
@@ -225,7 +246,7 @@ describe('notifications', () => {
     vi.useFakeTimers();
 
     const s = store();
-    s.setDiscordPostedAt(1, '2026-09-09T12:00:00Z');
+    s.setDiscordPostedAt(prKey(HOME, 1), '2026-09-09T12:00:00Z');
     const poller = createPoller(cfg, s);
     mockFetchOpenPrs.mockResolvedValue([pr({ number: 1 })]);
 
@@ -259,7 +280,7 @@ describe("Claude's verdict", () => {
 
   /** Priming the cache keeps resolveEscalation entirely offline. */
   const storeWithVerdict = (court: 'me' | 'reviewer') => {
-    const s = openStore(':memory:');
+    const s = openStore(':memory:', HOME);
     s.putVerdict('r1', null, verdict(court));
     return s;
   };
@@ -306,6 +327,36 @@ describe("Claude's verdict", () => {
     expect(board?.items[0]?.receipts.join(' '))
       .toContain('needs-your-response to waiting-on-reviewer');
     expect(board?.yourCourtCount).toBe(0);
+  });
+
+  it('attaches the verdict from the right repo when PR numbers collide', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    // Same number in both repos: only the PR in HOME has the commented
+    // review, so only it may be escalated and resolved.
+    mockFetchOpenPrs.mockResolvedValue([
+      pr({ repo: 'paranext/paratext-10-studio', number: 7 }),
+      pr({ repo: HOME, number: 7, reviews: [commented] }),
+    ]);
+
+    const poller = createPoller(cfg, storeWithVerdict('me'));
+    await poller.refresh();
+
+    const items = poller.snapshot()?.items ?? [];
+    const core = items.find((i) => i.repo === HOME);
+    const studio = items.find((i) => i.repo === 'paranext/paratext-10-studio');
+    expect(core?.verdict?.court).toBe('me');
+    expect(studio?.verdict).toBeNull();
+  });
+
+  it('titles notifications with the repo name', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    mockFetchOpenPrs.mockResolvedValue([
+      pr({ repo: 'paranext/paratext-10-studio', number: 202, mergeStateStatus: 'DIRTY' }),
+    ]);
+    await createPoller(cfg, openStore(':memory:', HOME)).refresh();
+    expect(mockNotify.mock.calls[0]?.[0]).toBe('paratext-10-studio #202');
   });
 
   it('leaves the bucket alone when the verdict agrees with the rules', async () => {

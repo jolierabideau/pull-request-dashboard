@@ -1,4 +1,6 @@
 export interface BoardItem {
+  /** `owner/name`; with `number` it identifies the PR. */
+  repo: string;
   number: number;
   title: string;
   url: string;
@@ -25,9 +27,9 @@ export const fetchBoard = async (): Promise<Board> => {
 };
 
 export const markPostedToDiscord = async (
-  number: number, posted: boolean,
+  repo: string, number: number, posted: boolean,
 ): Promise<void> => {
-  await fetch(`/api/pr/${number}/discord`, {
+  await fetch(`/api/pr/${repo}/${number}/discord`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ posted }),

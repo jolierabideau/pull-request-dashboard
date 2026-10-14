@@ -1,12 +1,17 @@
 import Database from 'better-sqlite3';
 import { NOTIFY_KEYS, type NotifyKey } from '../rules/notify.js';
+import { prKey } from '../pr-key.js';
 import type { ClaudeVerdict } from '../types.js';
 
 const DEBOUNCE_MS = 15 * 60 * 1000;
 
+/**
+ * Per-PR methods take a `prKey(repo, number)` string, so the same number in two
+ * repos never shares state.
+ */
 export interface Store {
-  getDiscordPostedAt(pr: number): string | null;
-  setDiscordPostedAt(pr: number, at: string | null): void;
+  getDiscordPostedAt(pr: string): string | null;
+  setDiscordPostedAt(pr: string, at: string | null): void;
   getVerdict(reviewId: string, lastEditedAt: string | null): ClaudeVerdict | null;
   putVerdict(reviewId: string, lastEditedAt: string | null, v: ClaudeVerdict): void;
   /**
@@ -14,41 +19,47 @@ export interface Store {
    * OBSERVED for this PR, and the debounce since the last notification that
    * actually fired has elapsed.
    */
-  shouldNotify(pr: number, key: NotifyKey, now: Date): boolean;
+  shouldNotify(pr: string, key: NotifyKey, now: Date): boolean;
   /** Called for every item on every poll, notification or not. */
-  recordObserved(pr: number, key: NotifyKey): void;
+  recordObserved(pr: string, key: NotifyKey): void;
   /** Called only when a notification actually fired. */
-  recordNotified(pr: number, key: NotifyKey, now: Date): void;
+  recordNotified(pr: string, key: NotifyKey, now: Date): void;
   close(): void;
 }
 
-export function openStore(path: string): Store {
+/**
+ * `homeRepo` is `owner/name` of the configured home repo. Databases written
+ * before PRs were keyed by repo hold bare PR numbers, which could only have come
+ * from that repo, so they are carried over under its key.
+ */
+export function openStore(path: string, homeRepo: string): Store {
   const db = new Database(path);
   db.pragma('journal_mode = WAL');
   db.exec(`
-    CREATE TABLE IF NOT EXISTS discord (pr INTEGER PRIMARY KEY, posted_at TEXT);
+    CREATE TABLE IF NOT EXISTS discord_v2 (pr_key TEXT PRIMARY KEY, posted_at TEXT);
     CREATE TABLE IF NOT EXISTS verdicts (
       key TEXT PRIMARY KEY, payload TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS notify_state (
-      pr INTEGER PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS notify_state_v2 (
+      pr_key TEXT PRIMARY KEY,
       last_key TEXT NOT NULL,
       last_notified_at TEXT
     );
   `);
+  migrateLegacyTables(db, homeRepo);
 
   const key = (id: string, edited: string | null) => `${id}@${edited ?? 'never'}`;
 
   return {
     getDiscordPostedAt(pr) {
-      const row = db.prepare('SELECT posted_at FROM discord WHERE pr = ?').get(pr) as
+      const row = db.prepare('SELECT posted_at FROM discord_v2 WHERE pr_key = ?').get(pr) as
         | { posted_at: string | null } | undefined;
       return row?.posted_at ?? null;
     },
     setDiscordPostedAt(pr, at) {
       db.prepare(
-        `INSERT INTO discord (pr, posted_at) VALUES (?, ?)
-         ON CONFLICT(pr) DO UPDATE SET posted_at = excluded.posted_at`,
+        `INSERT INTO discord_v2 (pr_key, posted_at) VALUES (?, ?)
+         ON CONFLICT(pr_key) DO UPDATE SET posted_at = excluded.posted_at`,
       ).run(pr, at);
     },
     getVerdict(reviewId, lastEditedAt) {
@@ -65,7 +76,7 @@ export function openStore(path: string): Store {
     shouldNotify(pr, key, now) {
       if (!NOTIFY_KEYS.has(key)) return false;
       const row = db.prepare(
-        'SELECT last_key, last_notified_at FROM notify_state WHERE pr = ?',
+        'SELECT last_key, last_notified_at FROM notify_state_v2 WHERE pr_key = ?',
       ).get(pr) as { last_key: string; last_notified_at: string | null } | undefined;
       if (row === undefined) return true;
       // The PR has not actually moved since we last looked at it.
@@ -75,18 +86,49 @@ export function openStore(path: string): Store {
     },
     recordObserved(pr, key) {
       db.prepare(
-        `INSERT INTO notify_state (pr, last_key, last_notified_at) VALUES (?, ?, NULL)
-         ON CONFLICT(pr) DO UPDATE SET last_key = excluded.last_key`,
+        `INSERT INTO notify_state_v2 (pr_key, last_key, last_notified_at) VALUES (?, ?, NULL)
+         ON CONFLICT(pr_key) DO UPDATE SET last_key = excluded.last_key`,
       ).run(pr, key);
     },
     recordNotified(pr, key, now) {
       db.prepare(
-        `INSERT INTO notify_state (pr, last_key, last_notified_at) VALUES (?, ?, ?)
-         ON CONFLICT(pr) DO UPDATE SET
+        `INSERT INTO notify_state_v2 (pr_key, last_key, last_notified_at) VALUES (?, ?, ?)
+         ON CONFLICT(pr_key) DO UPDATE SET
            last_key = excluded.last_key,
            last_notified_at = excluded.last_notified_at`,
       ).run(pr, key, now.toISOString());
     },
     close() { db.close(); },
   };
+}
+
+const tableExists = (db: Database.Database, name: string): boolean =>
+  db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+
+/** Copies the integer-keyed tables into the text-keyed ones, then drops them. */
+function migrateLegacyTables(db: Database.Database, homeRepo: string): void {
+  const migrate = db.transaction(() => {
+    if (tableExists(db, 'discord')) {
+      const rows = db.prepare('SELECT pr, posted_at FROM discord').all() as
+        { pr: number; posted_at: string | null }[];
+      const insert = db.prepare(
+        'INSERT OR IGNORE INTO discord_v2 (pr_key, posted_at) VALUES (?, ?)',
+      );
+      for (const row of rows) insert.run(prKey(homeRepo, row.pr), row.posted_at);
+      db.exec('DROP TABLE discord');
+    }
+    if (tableExists(db, 'notify_state')) {
+      const rows = db.prepare('SELECT pr, last_key, last_notified_at FROM notify_state').all() as
+        { pr: number; last_key: string; last_notified_at: string | null }[];
+      const insert = db.prepare(
+        `INSERT OR IGNORE INTO notify_state_v2 (pr_key, last_key, last_notified_at)
+         VALUES (?, ?, ?)`,
+      );
+      for (const row of rows) {
+        insert.run(prKey(homeRepo, row.pr), row.last_key, row.last_notified_at);
+      }
+      db.exec('DROP TABLE notify_state');
+    }
+  });
+  migrate();
 }

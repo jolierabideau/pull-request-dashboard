@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildDemoBoard, DEMO_CONFIG, DEMO_NOW } from '../src/server/demo.js';
 import { openStore } from '../src/store/db.js';
+import { prKey } from '../src/pr-key.js';
 
 describe('demo board', () => {
   it('classifies every captured fixture', () => {
@@ -23,12 +24,12 @@ describe('demo board', () => {
   // holds open: the PR has to actually leave "not asked" for the button to be
   // worth advertising in the README.
   it('moves a PR out of not-asked when it is marked posted to Discord', () => {
-    const store = openStore(':memory:');
+    const store = openStore(':memory:', 'paranext/paranext-core');
     try {
       const before = buildDemoBoard(store).items.filter((i) => i.bucket === 'not-asked');
       expect(before.length).toBeGreaterThan(0);
 
-      store.setDiscordPostedAt(before[0]!.number, DEMO_NOW.toISOString());
+      store.setDiscordPostedAt(prKey(before[0]!.repo, before[0]!.number), DEMO_NOW.toISOString());
 
       const after = buildDemoBoard(store).items.find((i) => i.number === before[0]!.number);
       expect(after?.bucket).toBe('asked-no-looks');
