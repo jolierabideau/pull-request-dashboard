@@ -4,6 +4,10 @@ export interface BoardItem {
   number: number;
   title: string;
   url: string;
+  /** Login of the PR's author. */
+  author: string;
+  /** 'author' for the user's own PRs, 'reviewer' for other people's. */
+  role: 'author' | 'reviewer';
   bucket: string;
   receipts: string[];
   displayTime: string | null;
@@ -13,8 +17,11 @@ export interface BoardItem {
 
 export interface Board {
   items: BoardItem[];
+  reviewing: BoardItem[];
   branches: { name: string; bucket: string }[];
   yourCourtCount: number;
+  myCourtCount: number;
+  reviewCourtCount: number;
   fetchedAt: string | null;
   stale: boolean;
   error: string | null;

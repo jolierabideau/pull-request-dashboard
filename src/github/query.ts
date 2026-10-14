@@ -3,6 +3,10 @@ const PR_FIELDS = `
   title
   url
   isDraft
+  author { login }
+  reviewRequests(first: 20) {
+    nodes { requestedReviewer { ... on User { login } } }
+  }
   mergeable
   mergeStateStatus
   reviews(first: 100) {

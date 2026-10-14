@@ -1,7 +1,8 @@
 import { classify } from '../rules/classify.js';
+import { classifyReviewing } from '../rules/reviewing.js';
 import { checkDot } from '../rules/checks.js';
 import { resolveEscalation } from '../claude/escalate.js';
-import { fetchOpenPrs } from '../github/client.js';
+import { fetchOpenPrs, fetchReviewingPrs } from '../github/client.js';
 import { readBranches } from '../git/branches.js';
 import { notifyKey } from '../rules/notify.js';
 import { prKey } from '../pr-key.js';
@@ -17,6 +18,10 @@ export interface BoardItem extends Classification {
   number: number;
   title: string;
   url: string;
+  /** Login of the PR's author. */
+  author: string;
+  /** Whether the user wrote the PR or is reviewing someone else's. */
+  role: 'author' | 'reviewer';
   isDraft: boolean;
   checkDot: 'fail' | 'pending' | 'pass' | 'none';
   /** Carried so the notify key can be recomputed after a verdict moves a bucket. */
@@ -29,9 +34,17 @@ export interface BranchItem {
 }
 
 export interface Board {
+  /** PRs the user wrote. */
   items: BoardItem[];
+  /** Other people's PRs the user has reviewed or commented on. */
+  reviewing: BoardItem[];
   branches: BranchItem[];
+  /** Everything waiting on the user: `myCourtCount` + `reviewCourtCount`. */
   yourCourtCount: number;
+  /** The user's own PRs that are in their court. */
+  myCourtCount: number;
+  /** Other people's PRs waiting on the user's review. */
+  reviewCourtCount: number;
   /** Null only on the board shell served before the first poll lands. */
   fetchedAt: string | null;
   stale: boolean;
@@ -44,9 +57,26 @@ const ORDER: Bucket[] = [
   'unsubmitted-branch', 'dead-branch',
 ];
 
+const REVIEW_ORDER: Bucket[] = [
+  'review-needs-you', 'review-waiting-on-author', 'review-approved',
+];
+
 const YOUR_COURT: Set<Bucket> = new Set([
   'blocked-mechanically', 'needs-your-response', 'ready-to-merge',
 ]);
+
+function sortItems(board: Board): void {
+  board.items.sort((a, b) => ORDER.indexOf(a.bucket) - ORDER.indexOf(b.bucket));
+  board.reviewing.sort(
+    (a, b) => REVIEW_ORDER.indexOf(a.bucket) - REVIEW_ORDER.indexOf(b.bucket),
+  );
+}
+
+function countCourts(board: Board): void {
+  board.myCourtCount = board.items.filter((i) => YOUR_COURT.has(i.bucket)).length;
+  board.reviewCourtCount = board.reviewing.filter((i) => i.bucket === 'review-needs-you').length;
+  board.yourCourtCount = board.myCourtCount + board.reviewCourtCount;
+}
 
 export function buildBoard(
   prs: PrInput[],
@@ -54,35 +84,55 @@ export function buildBoard(
   store: Store,
   cfg: Config,
   now: Date,
+  reviewingPrs: PrInput[] = [],
 ): Board {
+  const boardFields = (pr: PrInput, role: BoardItem['role']) => ({
+    repo: pr.repo,
+    number: pr.number,
+    title: pr.title,
+    url: pr.url,
+    author: pr.author,
+    role,
+    isDraft: pr.isDraft,
+    checkDot: checkDot(pr.checks),
+  });
+
   const items: BoardItem[] = prs.map((pr) => {
     const local = { discordPostedAt: store.getDiscordPostedAt(prKey(pr.repo, pr.number)) };
-    const classification = classify(pr, local, cfg, now);
     return {
-      ...classification,
-      repo: pr.repo,
-      number: pr.number,
-      title: pr.title,
-      url: pr.url,
-      isDraft: pr.isDraft,
-      checkDot: checkDot(pr.checks),
+      ...classify(pr, local, cfg, now),
+      ...boardFields(pr, 'author'),
       discordPostedAt: local.discordPostedAt,
     };
   });
 
-  items.sort((a, b) => ORDER.indexOf(a.bucket) - ORDER.indexOf(b.bucket));
+  // A PR that somehow turns up on both sides stays on the author side only.
+  const mine = new Set(prs.map((pr) => prKey(pr.repo, pr.number)));
+  const reviewing: BoardItem[] = reviewingPrs
+    .filter((pr) => !mine.has(prKey(pr.repo, pr.number)))
+    .map((pr) => ({
+      ...classifyReviewing(pr, cfg),
+      ...boardFields(pr, 'reviewer'),
+      discordPostedAt: null,
+    }));
 
-  return {
+  const board: Board = {
     items,
+    reviewing,
     branches: branches.map((b) => ({
       name: b.name,
       bucket: b.upstreamGone ? ('dead-branch' as const) : ('unsubmitted-branch' as const),
     })),
-    yourCourtCount: items.filter((i) => YOUR_COURT.has(i.bucket)).length,
+    yourCourtCount: 0,
+    myCourtCount: 0,
+    reviewCourtCount: 0,
     fetchedAt: now.toISOString(),
     stale: false,
     error: null,
   };
+  sortItems(board);
+  countCourts(board);
+  return board;
 }
 
 export interface Poller {
@@ -109,11 +159,13 @@ export function createPoller(cfg: Config, store: Store): Poller {
     };
 
     try {
-      const prs = await fetchOpenPrs(cfg);
+      const [prs, reviewingPrs] = await Promise.all([
+        fetchOpenPrs(cfg), fetchReviewingPrs(cfg),
+      ]);
       // No branch-to-PR correlation is asserted: the GraphQL query does not
       // fetch headRefName, so there is nothing honest to match branches on.
       const branches = readBranches(cfg.repoPath, new Set<string>());
-      const next = buildBoard(prs, branches, store, cfg, new Date());
+      const next = buildBoard(prs, branches, store, cfg, new Date(), reviewingPrs);
 
       await attachVerdicts(next, prs, store);
       if (superseded()) return;
@@ -124,8 +176,11 @@ export function createPoller(cfg: Config, store: Store): Poller {
       const staleBoard: Board = board === null
         ? {
             items: [],
+            reviewing: [],
             branches: [],
             yourCourtCount: 0,
+            myCourtCount: 0,
+            reviewCourtCount: 0,
             fetchedAt: new Date().toISOString(),
             stale: true,
             error: message,
@@ -177,18 +232,21 @@ async function attachVerdicts(
       item.receipts.push(`Claude's verdict moved this from ${from} to ${to}`);
     }
   }
-  board.items.sort((a, b) => ORDER.indexOf(a.bucket) - ORDER.indexOf(b.bucket));
-  board.yourCourtCount = board.items.filter((i) => YOUR_COURT.has(i.bucket)).length;
+  sortItems(board);
+  countCourts(board);
 }
 
 function sendNotifications(board: Board, store: Store, cfg: Config): void {
   const now = new Date();
-  for (const item of board.items) {
+  for (const item of [...board.items, ...board.reviewing]) {
     const key = notifyKey(item, cfg, now);
     const id = prKey(item.repo, item.number);
     if (store.shouldNotify(id, key, now)) {
       const repoName = item.repo.split('/')[1] ?? item.repo;
-      notify(`${repoName} #${item.number}`, `${key}: ${item.title}`, item.url);
+      const body = item.role === 'reviewer'
+        ? `review needed: ${item.title}`
+        : `${key}: ${item.title}`;
+      notify(`${repoName} #${item.number}`, body, item.url);
       store.recordNotified(id, key, now);
       continue;
     }

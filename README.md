@@ -2,8 +2,9 @@
 
 A local dashboard that answers one question about your open pull requests: **whose
 court is the ball in?** It polls GitHub, sorts your PRs into prioritized buckets
-(blocked, needs your response, ready to merge, waiting on a reviewer, …), shows the
-receipts behind every verdict, and notifies you when a PR changes court.
+(blocked, needs your response, ready to merge, waiting on a reviewer, …), does the same
+for other people's PRs you have reviewed, shows the receipts behind every verdict, and
+notifies you when a PR changes court.
 
 It runs entirely on your machine. Each person runs their own copy, tracking their own
 GitHub login.
@@ -92,6 +93,34 @@ unsubmitted work: the GraphQL query doesn't fetch `headRefName`, so there's no h
 way to match a branch to its PR. A gone upstream is the only distinction the data
 supports.
 
+## Others' PRs
+
+The second tab, **Others' PRs**, lists open PRs written by other people that *you* have
+reviewed or commented on, sorted by whose turn it is. Only PRs you have already touched
+appear: a review that was requested of you but that you have never opened, reviewed or
+commented on is deliberately **not** included. A card shows the author ("by alice") next
+to the repo name and has no Posted to Discord button.
+
+| Bucket | What puts a PR here |
+| --- | --- |
+| **Needs your review** | In order: the newest Reviewable footer names you in "waiting on"; your review was re-requested; or the author pushed or replied after your last review or comment. Renders expanded and counts toward the headline. |
+| **Waiting on author** | The newest footer names someone else, or you reviewed or commented after the author's last activity (or at the same moment). |
+| **You approved** | Your newest review is an approval and the author has not commented since. A push after your approval does not pull it back, because Reviewable approvals survive pushes; a comment or thread reply from the author does. |
+
+The first matching rule wins, and the card's receipts say which one it was. A footer
+only counts while nothing from you or the author is newer than the review carrying it.
+Only your activity and the author's matter: other reviewers are ignored, as are logins in
+`botLogins` (a bot's Reviewable footer is still read). The author's activity is their
+pushes (a bare merge of main does not count), issue comments, review-thread replies and
+reviews; yours is your reviews, issue comments and review-thread replies. A draft is
+classified the same way and its card says "draft".
+
+The headline counts both tabs: **N in your court** is your own PRs that need you plus the
+reviews waiting on you. Under it, a one-line summary breaks that down ("2 on your PRs · 1
+review waiting on you", or "Nothing waiting on you"), and each tab label carries its own
+count, so you never have to open a tab to learn whether work is waiting there. The tab you
+last used is remembered in your browser; the default is My PRs.
+
 ## Using the board
 
 **Receipts.** Every card lists the evidence behind its bucket — which footer was read,
@@ -109,7 +138,8 @@ looked" and stops it reading as something you've forgotten to send out. The stam
 local to your database, not anything posted to GitHub or Discord for you.
 
 **Notifications** fire when a PR *arrives* in "needs your response", "blocked on you",
-or "ready to merge", and when a Discord-posted PR goes stale. They are debounced 15
+or "ready to merge", when another person's PR arrives in "needs your review", and when a
+Discord-posted PR goes stale. They are debounced 15
 minutes and only re-fire when a PR actually changes state, so a PR sitting still stays
 quiet. Clicking one opens the PR.
 
@@ -169,6 +199,7 @@ src/
     footer.ts     parses the Reviewable footer
     activity.ts   who acted last, ignoring bots and bare merges of main
     checks.ts     failing checks, the check dot, conflict state
+    reviewing.ts  buckets for other people's PRs you have reviewed
     notify.ts     what a notification is keyed on
   github/     GraphQL query, client, and `gh auth token` lookup
   git/        reads local branches via `git for-each-ref`
@@ -180,7 +211,7 @@ client/src/   React board — App, Card, bucket labels and ordering
 ```
 
 The seam worth knowing: `buildBoard()` in `src/server/poller.ts` is a pure function of
-`(prs, branches, store, config, now)`. The poller wraps it with network I/O; demo mode
+`(prs, branches, store, config, now, reviewingPrs)`. The poller wraps it with network I/O; demo mode
 feeds it fixtures. That's why the demo needs no GitHub access.
 
 **To change how PRs are classified**, edit `src/rules/classify.ts` and add a case to
@@ -188,7 +219,8 @@ feeds it fixtures. That's why the demo needs no GitHub access.
 change that breaks a real-world case fails the suite.
 
 **To add a new bucket**, it needs a `Bucket` member in `src/types.ts`, an entry in
-`ORDER` in `src/server/poller.ts`, and a label in `client/src/buckets.ts`.
+`ORDER` (or `REVIEW_ORDER` for the Others' PRs tab) in `src/server/poller.ts`, and a
+label in `client/src/buckets.ts`.
 
 ## Development
 

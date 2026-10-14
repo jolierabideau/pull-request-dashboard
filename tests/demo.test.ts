@@ -44,6 +44,14 @@ describe('demo board', () => {
     expect(board.error).toBeNull();
   });
 
+  it('has no reviewing items, since every fixture is the demo user own PR', () => {
+    const board = buildDemoBoard();
+    expect(board.reviewing).toEqual([]);
+    expect(board.reviewCourtCount).toBe(0);
+    expect(board.yourCourtCount).toBe(board.myCourtCount);
+    expect(board.items.every((i) => i.role === 'author')).toBe(true);
+  });
+
   it('shows local branches so that section is not empty', () => {
     expect(buildDemoBoard().branches.length).toBeGreaterThan(0);
   });

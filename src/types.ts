@@ -50,6 +50,10 @@ export interface PrInput {
   number: number;
   title: string;
   url: string;
+  /** Login of the PR's author; 'unknown' when GitHub reports none. */
+  author: string;
+  /** Logins of users with a pending review request on the PR. */
+  requestedReviewers: string[];
   isDraft: boolean;
   headOid: string;
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
@@ -78,6 +82,9 @@ export type Bucket =
   | 'asked-no-looks'
   | 'not-asked'
   | 'draft'
+  | 'review-needs-you'
+  | 'review-waiting-on-author'
+  | 'review-approved'
   | 'unsubmitted-branch'
   | 'dead-branch';
 

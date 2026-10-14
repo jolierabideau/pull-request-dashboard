@@ -7,6 +7,14 @@ style.textContent = `
   body { font: 14px/1.5 system-ui, sans-serif; margin: 0; background: #faf9f7; color: #1c1b19; }
   main { max-width: 820px; margin: 0 auto; padding: 24px 16px; }
   h1 { font-size: 20px; } h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: #6b6862; margin-top: 28px; }
+  .summary { margin: -6px 0 16px; color: #6b6862; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid #e6e3dd; margin-top: 16px; }
+  .tab { margin: 0 0 -1px; padding: 6px 12px; border: 1px solid transparent; border-bottom: 0;
+         border-radius: 6px 6px 0 0; background: transparent; color: #6b6862; }
+  .tab[aria-selected="true"] { background: #fff; border-color: #e6e3dd; color: #1c1b19; font-weight: 600; }
+  .badge { margin-left: 6px; padding: 0 7px; border-radius: 999px; background: #1c1b19; color: #faf9f7;
+           font-size: 12px; font-variant-numeric: tabular-nums; }
+  .empty { color: #6b6862; margin-top: 20px; }
   .banner { background: #fdf3d7; border: 1px solid #e8d9a0; color: #1c1b19; padding: 8px 12px; border-radius: 6px; }
   .cards { list-style: none; padding: 0; display: grid; gap: 10px; }
   .card { background: #fff; border: 1px solid #e6e3dd; border-radius: 8px; padding: 12px 14px; }
@@ -23,6 +31,11 @@ style.textContent = `
   @media (prefers-color-scheme: dark) {
     body { background: #171614; color: #ece9e3; }
     h2 { color: #9b968d; }
+    .summary, .empty { color: #9b968d; }
+    .tabs { border-bottom-color: #35332e; }
+    .tab { color: #9b968d; }
+    .tab[aria-selected="true"] { background: #201f1c; border-color: #35332e; color: #ece9e3; }
+    .badge { background: #ece9e3; color: #171614; }
     .card { background: #201f1c; border-color: #35332e; }
     .receipts { color: #9b968d; }
     /* The banner sets its own palette in both schemes: inheriting body's

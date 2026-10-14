@@ -6,7 +6,7 @@ const ctx = (conclusion: string | null, status = 'COMPLETED'): CheckContext =>
   ({ name: 'Test', status, conclusion });
 
 const pr = (over: Partial<PrInput>): PrInput => ({
-  repo: 'paranext/paranext-core', number: 1, title: 't', url: 'u', isDraft: false, headOid: 'abc',
+  repo: 'paranext/paranext-core', number: 1, title: 't', url: 'u', author: 'jolierabideau', requestedReviewers: [], isDraft: false, headOid: 'abc',
   mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
   reviews: [], comments: [], commits: [], threads: [], checks: [], ...over,
 });

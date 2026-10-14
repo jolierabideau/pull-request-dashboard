@@ -45,12 +45,20 @@ const DEMO_BRANCHES: BranchInput[] = [
 
 const DEMO_HOME_REPO = `${DEMO_CONFIG.owner}/${DEMO_CONFIG.name}`;
 
-/** Fixtures captured before PRs carried a `repo` get it from their URL. */
+/**
+ * Fixtures captured before PRs carried a `repo`, `author` or review requests
+ * get the repo from their URL; every fixture is one of the demo user's own PRs.
+ */
 const loadFixture = (n: number): PrInput => {
   const fixture = JSON.parse(
     readFileSync(new URL(`../../tests/fixtures/pr-${n}.json`, import.meta.url), 'utf8'),
-  ) as PrInput;
-  return { ...fixture, repo: fixture.repo ?? repoFromUrl(fixture.url) };
+  ) as Partial<PrInput> & Pick<PrInput, 'url'>;
+  return {
+    ...fixture,
+    repo: fixture.repo ?? repoFromUrl(fixture.url),
+    author: fixture.author ?? DEMO_CONFIG.me,
+    requestedReviewers: fixture.requestedReviewers ?? [],
+  } as PrInput;
 };
 
 /**

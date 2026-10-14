@@ -1,7 +1,7 @@
 import type { CheckContext, Config, PrInput } from '../types.js';
 import { clearTokenCache, getToken } from './token.js';
 import { LIST_QUERY } from './query.js';
-import { repoFromUrl } from '../pr-key.js';
+import { prKey, repoFromUrl } from '../pr-key.js';
 
 interface GqlNode { [key: string]: any }
 
@@ -11,6 +11,10 @@ export function mapPullRequest(node: GqlNode): PrInput {
     number: node.number,
     title: node.title,
     url: node.url,
+    author: node.author?.login ?? 'unknown',
+    requestedReviewers: (node.reviewRequests?.nodes ?? [])
+      .map((r: GqlNode) => r.requestedReviewer?.login)
+      .filter((login: unknown): login is string => typeof login === 'string'),
     isDraft: node.isDraft,
     headOid: node.headRefOid,
     mergeable: node.mergeable,
@@ -77,11 +81,35 @@ function mapStatusContext(c: GqlNode): CheckContext {
   }
 }
 
-export async function fetchOpenPrs(cfg: Config): Promise<PrInput[]> {
-  const where = cfg.scope === 'org' ? `org:${cfg.owner}` : `repo:${cfg.owner}/${cfg.name}`;
-  const q = `${where} is:pr is:open author:${cfg.me}`;
+const searchScope = (cfg: Config): string =>
+  cfg.scope === 'org' ? `org:${cfg.owner}` : `repo:${cfg.owner}/${cfg.name}`;
+
+async function searchPrs(q: string): Promise<PrInput[]> {
   const data = await graphql<{ search: { nodes: GqlNode[] } }>(LIST_QUERY, { q });
   return data.search.nodes.filter((n) => n.number !== undefined).map(mapPullRequest);
+}
+
+export function fetchOpenPrs(cfg: Config): Promise<PrInput[]> {
+  return searchPrs(`${searchScope(cfg)} is:pr is:open author:${cfg.me}`);
+}
+
+/**
+ * Open PRs by other people that `me` has reviewed or commented on. GitHub has
+ * no single qualifier for "reviewed or commented", so two searches run
+ * concurrently and their results are merged by PR identity.
+ */
+export async function fetchReviewingPrs(cfg: Config): Promise<PrInput[]> {
+  const base = `${searchScope(cfg)} is:pr is:open -author:${cfg.me}`;
+  const [reviewed, commented] = await Promise.all([
+    searchPrs(`${base} reviewed-by:${cfg.me}`),
+    searchPrs(`${base} commenter:${cfg.me}`),
+  ]);
+  const byKey = new Map<string, PrInput>();
+  for (const pr of [...reviewed, ...commented]) {
+    const key = prKey(pr.repo, pr.number);
+    if (!byKey.has(key)) byKey.set(key, pr);
+  }
+  return [...byKey.values()];
 }
 
 async function graphql<T>(

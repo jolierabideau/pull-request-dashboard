@@ -12,7 +12,8 @@ export function registerRoutes(
     const board = poller.snapshot();
     if (board === null) {
       return reply.send({
-        items: [], branches: [], yourCourtCount: 0,
+        items: [], reviewing: [], branches: [],
+        yourCourtCount: 0, myCourtCount: 0, reviewCourtCount: 0,
         fetchedAt: null, stale: true, error: 'no data yet — retrying',
       });
     }

@@ -13,6 +13,7 @@ export const NOTIFY_KEYS: Set<NotifyKey> = new Set([
   'blocked-mechanically',
   'ready-to-merge',
   'asked-no-looks-stale',
+  'review-needs-you',
 ]);
 
 export interface NotifyKeyInput {

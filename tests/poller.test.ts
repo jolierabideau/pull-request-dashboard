@@ -4,10 +4,14 @@ import { prKey } from '../src/pr-key.js';
 import type { Config, PrInput } from '../src/types.js';
 
 const { mockFetchOpenPrs } = vi.hoisted(() => ({ mockFetchOpenPrs: vi.fn() }));
+const { mockFetchReviewingPrs } = vi.hoisted(() => ({
+  mockFetchReviewingPrs: vi.fn(async (): Promise<unknown[]> => []),
+}));
 const { mockNotify } = vi.hoisted(() => ({ mockNotify: vi.fn() }));
 
 vi.mock('../src/github/client.js', () => ({
   fetchOpenPrs: mockFetchOpenPrs,
+  fetchReviewingPrs: mockFetchReviewingPrs,
 }));
 vi.mock('../src/git/branches.js', () => ({
   readBranches: vi.fn(() => []),
@@ -35,7 +39,7 @@ const cfg: Config = {
 const NOW = new Date('2026-09-11T12:00:00Z');
 
 const pr = (over: Partial<PrInput>): PrInput => ({
-  repo: HOME, number: 1, title: 't', url: 'u', isDraft: false, headOid: 'abc',
+  repo: HOME, number: 1, title: 't', url: 'u', author: 'jolierabideau', requestedReviewers: [], isDraft: false, headOid: 'abc',
   mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
   reviews: [], comments: [],
   commits: [{
@@ -370,5 +374,105 @@ describe("Claude's verdict", () => {
     const item = poller.snapshot()?.items[0];
     expect(item?.bucket).toBe('needs-your-response');
     expect(item?.receipts.join(' ')).not.toContain('moved this');
+  });
+});
+
+describe('reviewing PRs', () => {
+  const ALICE = 'alice';
+  const theirPr = (over: Partial<PrInput>): PrInput => pr({
+    author: ALICE,
+    commits: [{
+      oid: 'a1', committedDate: '2026-09-01T00:00:00Z',
+      authorLogin: ALICE, authorEmail: null, messageHeadline: 'PT-9: work', parentCount: 1,
+    }],
+    ...over,
+  });
+  const myReview = {
+    id: 'm1', author: 'jolierabideau', state: 'COMMENTED' as const,
+    submittedAt: '2026-09-05T00:00:00Z', bodyText: '', lastEditedAt: null,
+  };
+  const needsYou = theirPr({ number: 10 });
+  const waiting = theirPr({ number: 11, reviews: [myReview] });
+  const approved = theirPr({
+    number: 12, reviews: [{ ...myReview, id: 'm2', state: 'APPROVED' }],
+  });
+  const store = () => openStore(':memory:', HOME);
+
+  it('sorts reviewing items needs-you, waiting-on-author, approved', () => {
+    const board = buildBoard([], [], store(), cfg, NOW, [approved, waiting, needsYou]);
+    expect(board.reviewing.map((i) => i.bucket)).toEqual([
+      'review-needs-you', 'review-waiting-on-author', 'review-approved',
+    ]);
+    expect(board.reviewing.every((i) => i.role === 'reviewer' && i.author === ALICE)).toBe(true);
+    expect(board.reviewing.every((i) => i.discordPostedAt === null)).toBe(true);
+  });
+
+  it('counts the two courts separately and sums them for the headline', () => {
+    const board = buildBoard(
+      [pr({ number: 1, mergeStateStatus: 'DIRTY' }), pr({ number: 2 })],
+      [], store(), cfg, NOW, [needsYou, theirPr({ number: 13 }), waiting, approved],
+    );
+    expect(board.myCourtCount).toBe(1);
+    expect(board.reviewCourtCount).toBe(2);
+    expect(board.yourCourtCount).toBe(3);
+    expect(board.items.every((i) => i.role === 'author')).toBe(true);
+  });
+
+  it('keeps a PR that appears in both lists on the author side only', () => {
+    const board = buildBoard(
+      [pr({ number: 10 })], [], store(), cfg, NOW, [theirPr({ number: 10 })],
+    );
+    expect(board.items.map((i) => i.number)).toEqual([10]);
+    expect(board.reviewing).toEqual([]);
+  });
+
+  it('keeps the same number in a different repo on the reviewing side', () => {
+    const board = buildBoard(
+      [pr({ number: 10 })], [], store(), cfg, NOW,
+      [theirPr({ number: 10, repo: 'paranext/paratext-10-studio' })],
+    );
+    expect(board.reviewing).toHaveLength(1);
+  });
+
+  it('notifies once for a review waiting on you, titled with the repo name', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    mockFetchReviewingPrs.mockReset();
+    mockFetchOpenPrs.mockResolvedValue([]);
+    mockFetchReviewingPrs.mockResolvedValue([
+      theirPr({ number: 10, repo: 'paranext/paratext-10-studio', title: 'Add thing' }),
+      waiting,
+    ]);
+
+    const poller = createPoller(cfg, store());
+    await poller.refresh();
+    await poller.refresh();
+
+    expect(mockNotify).toHaveBeenCalledTimes(1);
+    expect(mockNotify.mock.calls[0]?.[0]).toBe('paratext-10-studio #10');
+    expect(mockNotify.mock.calls[0]?.[1]).toBe('review needed: Add thing');
+    expect(poller.snapshot()?.reviewCourtCount).toBe(1);
+    expect(poller.snapshot()?.yourCourtCount).toBe(1);
+    mockFetchReviewingPrs.mockReset();
+    mockFetchReviewingPrs.mockResolvedValue([]);
+  });
+
+  it('fails the poll when the reviewing fetch fails, keeping the last good board', async () => {
+    mockFetchOpenPrs.mockReset();
+    mockNotify.mockReset();
+    mockFetchReviewingPrs.mockReset();
+    mockFetchOpenPrs.mockResolvedValue([]);
+    mockFetchReviewingPrs.mockResolvedValueOnce([needsYou]);
+    const poller = createPoller(cfg, store());
+    await poller.refresh();
+    mockFetchReviewingPrs.mockRejectedValueOnce(new Error('boom'));
+    await poller.refresh();
+
+    const board = poller.snapshot();
+    expect(board?.stale).toBe(true);
+    expect(board?.error).toBe('boom');
+    expect(board?.reviewing).toHaveLength(1);
+    mockFetchReviewingPrs.mockReset();
+    mockFetchReviewingPrs.mockResolvedValue([]);
   });
 });

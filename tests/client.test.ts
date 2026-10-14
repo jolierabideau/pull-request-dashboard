@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchOpenPrs, mapPullRequest } from '../src/github/client.js';
+import { fetchOpenPrs, fetchReviewingPrs, mapPullRequest } from '../src/github/client.js';
 import type { Config } from '../src/types.js';
 import { checkDot } from '../src/rules/checks.js';
 
@@ -109,6 +109,84 @@ describe('mapPullRequest — repo identity', () => {
 
   it('throws when the url does not name a repo', () => {
     expect(() => mapPullRequest({ ...baseNode, url: 'u' })).toThrow(/which repo/);
+  });
+});
+
+describe('mapPullRequest — author and review requests', () => {
+  it('maps the author login and the requested reviewers', () => {
+    const pr = mapPullRequest({
+      ...baseNode,
+      author: { login: 'alice' },
+      reviewRequests: {
+        nodes: [
+          { requestedReviewer: { login: 'jolierabideau' } },
+          { requestedReviewer: {} },
+          { requestedReviewer: null },
+        ],
+      },
+    });
+    expect(pr.author).toBe('alice');
+    expect(pr.requestedReviewers).toEqual(['jolierabideau']);
+  });
+
+  it('defaults a missing author to unknown and missing requests to none', () => {
+    const pr = mapPullRequest({ ...baseNode, author: null });
+    expect(pr.author).toBe('unknown');
+    expect(pr.requestedReviewers).toEqual([]);
+  });
+});
+
+describe('fetchReviewingPrs', () => {
+  const cfg: Config = {
+    repoPath: '/tmp', owner: 'paranext', name: 'paranext-core',
+    me: 'jolierabideau', botLogins: [], pollIntervalMs: 180000, staleAfterHours: 48,
+  };
+
+  const node = (repo: string, number: number) => ({
+    ...baseNode, number, url: `https://github.com/${repo}/pull/${number}`,
+  });
+
+  /** Answers each search by its query text and records every query asked. */
+  const stubSearch = (answers: Record<string, unknown[]>) => {
+    const queries: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
+      const { q } = (JSON.parse(init.body) as { variables: { q: string } }).variables;
+      queries.push(q);
+      const key = Object.keys(answers).find((k) => q.endsWith(k));
+      return new Response(
+        JSON.stringify({ data: { search: { nodes: answers[key ?? ''] ?? [] } } }),
+        { status: 200 },
+      );
+    }));
+    return queries;
+  };
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('searches reviewed-by and commenter, excluding the user own PRs', async () => {
+    const queries = stubSearch({});
+    await fetchReviewingPrs(cfg);
+    expect(queries.sort()).toEqual([
+      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau commenter:jolierabideau',
+      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau reviewed-by:jolierabideau',
+    ]);
+  });
+
+  it('searches the whole org when scope is org', async () => {
+    const queries = stubSearch({});
+    await fetchReviewingPrs({ ...cfg, scope: 'org' });
+    expect(queries.every((q) => q.startsWith('org:paranext is:pr is:open -author:'))).toBe(true);
+  });
+
+  it('merges both searches and drops PRs found by both', async () => {
+    stubSearch({
+      'reviewed-by:jolierabideau': [node('paranext/paranext-core', 1), node('paranext/paranext-core', 2)],
+      'commenter:jolierabideau': [node('paranext/paranext-core', 2), node('paranext/paratext-10-studio', 2)],
+    });
+    const prs = await fetchReviewingPrs(cfg);
+    expect(prs.map((p) => `${p.repo}#${p.number}`).sort()).toEqual([
+      'paranext/paranext-core#1', 'paranext/paranext-core#2', 'paranext/paratext-10-studio#2',
+    ]);
   });
 });
 

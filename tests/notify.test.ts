@@ -36,7 +36,16 @@ describe('notifyKey', () => {
 
   it('treats the stale key as notify-worthy alongside the three court buckets', () => {
     expect([...NOTIFY_KEYS].sort()).toEqual([
-      'asked-no-looks-stale', 'blocked-mechanically', 'needs-your-response', 'ready-to-merge',
+      'asked-no-looks-stale', 'blocked-mechanically', 'needs-your-response',
+      'ready-to-merge', 'review-needs-you',
     ]);
+  });
+
+  it('notifies for a review waiting on you but not for the other reviewer buckets', () => {
+    const keyOf = (bucket: Parameters<typeof notifyKey>[0]['bucket']) =>
+      notifyKey({ bucket, discordPostedAt: null }, cfg, NOW);
+    expect(NOTIFY_KEYS.has(keyOf('review-needs-you'))).toBe(true);
+    expect(NOTIFY_KEYS.has(keyOf('review-waiting-on-author'))).toBe(false);
+    expect(NOTIFY_KEYS.has(keyOf('review-approved'))).toBe(false);
   });
 });
