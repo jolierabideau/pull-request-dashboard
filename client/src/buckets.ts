@@ -15,7 +15,20 @@ export const BUCKET_LABEL: Record<Bucket, string> = {
   draft: 'Drafts',
 };
 
+export const REVIEW_BUCKET_ORDER = [
+  'review-needs-you', 'review-waiting-on-author', 'review-approved', 'review-quiet',
+] as const;
+
+export type ReviewBucket = (typeof REVIEW_BUCKET_ORDER)[number];
+
+export const REVIEW_BUCKET_LABEL: Record<ReviewBucket, string> = {
+  'review-needs-you': 'Needs your review',
+  'review-waiting-on-author': 'Waiting on author',
+  'review-approved': 'You approved',
+  'review-quiet': 'Gone quiet',
+};
+
 /** Buckets rendered expanded by default; the rest collapse to one line. */
-export const EXPANDED: Set<Bucket> = new Set([
-  'blocked-mechanically', 'needs-your-response', 'ready-to-merge',
+export const EXPANDED: Set<string> = new Set<Bucket | ReviewBucket>([
+  'blocked-mechanically', 'needs-your-response', 'ready-to-merge', 'review-needs-you',
 ]);

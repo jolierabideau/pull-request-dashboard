@@ -2,8 +2,9 @@
 
 A local dashboard that answers one question about your open pull requests: **whose
 court is the ball in?** It polls GitHub, sorts your PRs into prioritized buckets
-(blocked, needs your response, ready to merge, waiting on a reviewer, …), shows the
-receipts behind every verdict, and notifies you when a PR changes court.
+(blocked, needs your response, ready to merge, waiting on a reviewer, …), does the same
+for other people's PRs you have reviewed, shows the receipts behind every verdict, and
+notifies you when a PR changes court.
 
 It runs entirely on your machine. Each person runs their own copy, tracking their own
 GitHub login.
@@ -51,9 +52,9 @@ the real board (`npm run dev`).
 | --- | --- |
 | **Node 22+** | Needed even for the demo: `npm install` builds the `better-sqlite3` native module, and an older Node fails at that step. |
 | **GitHub CLI, logged in** | The server reads your token from `gh auth token` at startup. Run `gh auth login` first. No token is ever stored in this repo. |
-| **A local clone of the repo you're tracking** | The branch list reads it with `git -C`. Nothing is written to it. |
+| **A local clone of your home repo** | The branch list reads it with `git -C`. Nothing is written to it. |
 | **`ANTHROPIC_API_KEY`** | Optional. Used only to break ties on ambiguous reviews — see [Review escalation](#review-escalation). |
-| **macOS, for notifications** | The board itself works everywhere; desktop notifications don't. See [Known limits](#known-limits). |
+| **A browser that allows notifications** | Optional. Native `osascript` notifications are macOS-only; browser notifications work everywhere. See [Known limits](#known-limits). |
 
 ## Quickstart
 
@@ -92,6 +93,49 @@ unsubmitted work: the GraphQL query doesn't fetch `headRefName`, so there's no h
 way to match a branch to its PR. A gone upstream is the only distinction the data
 supports.
 
+## Others' PRs
+
+The second tab, **Others' PRs**, lists open PRs written by other people that *you* have
+reviewed or commented on, sorted by whose turn it is. Only PRs you have already touched
+appear: a review that was requested of you but that you have never opened, reviewed or
+commented on is deliberately **not** included. A card shows the author ("by alice") next
+to the repo name and has no Posted to Discord button.
+
+| Bucket | What puts a PR here |
+| --- | --- |
+| **Needs your review** | The newest Reviewable footer names you in "waiting on", or the author pushed or replied after your last review or comment. Renders expanded and counts toward the headline. |
+| **Waiting on author** | A draft (unless it has gone quiet, which wins), the newest footer names someone else, you reviewed or commented after the author's last activity (or at the same moment), or no activity from you or the author could be found (the card says so). |
+| **You approved** | Your newest review is an approval and the author has not commented since. A push after your approval does not pull it back, because Reviewable approvals survive pushes; a comment or thread reply from the author does. |
+| **Gone quiet** | GitHub shows no activity on the PR for more than `quietAfterDays` days (default 30). Collapsed, not counted in the headline, never notifies. |
+
+Rules run in this order and the first match wins: gone quiet, draft, Reviewable footer,
+approved, who acted last. The card's receipts say which one it was.
+
+Both searches (your own PRs, and the PRs you reviewed or commented on) are sorted by most
+recently updated and read the first 50, so on a very busy repo the least recently updated
+PRs can fall off the board. If the Others' PRs search fails while your own succeeds, the
+board keeps the last Others' PRs list and shows a warning instead of going stale.
+
+**Review requests are ignored on purpose.** Being listed as a requested reviewer never
+moves a PR, because many requests are automatic and say nothing about whether you will
+look. Only what you have actually done on a PR matters.
+
+The Reviewable-footer rule only applies when a review carries Reviewable's status footer.
+With plain GitHub comments it never fires, and who acted last decides. A footer only
+counts while nothing from you or the author is newer than the review carrying it. Only
+your activity and the author's matter: other reviewers are ignored, as are logins in
+`botLogins` (a bot's Reviewable footer is still read). The author's activity is their
+pushes (a bare merge of main does not count), issue comments, review-thread replies and
+reviews; yours is your reviews, issue comments and review-thread replies. Only each
+thread's last comment is fetched, so a thread reply counts only while it is the thread's
+latest comment: a later reply by someone else hides it.
+
+The headline counts both tabs: **N in your court** is your own PRs that need you plus the
+reviews waiting on you. Under it, a one-line summary breaks that down ("2 on your PRs · 1
+review waiting on you", or "Nothing waiting on you"), and each tab label carries its own
+count, so you never have to open a tab to learn whether work is waiting there. The tab you
+last used is remembered in your browser; the default is My PRs.
+
 ## Using the board
 
 **Receipts.** Every card lists the evidence behind its bucket — which footer was read,
@@ -109,29 +153,48 @@ looked" and stops it reading as something you've forgotten to send out. The stam
 local to your database, not anything posted to GitHub or Discord for you.
 
 **Notifications** fire when a PR *arrives* in "needs your response", "blocked on you",
-or "ready to merge", and when a Discord-posted PR goes stale. They are debounced 15
+or "ready to merge", when another person's PR arrives in "needs your review", and when a
+Discord-posted PR goes stale. They are debounced 15
 minutes and only re-fire when a PR actually changes state, so a PR sitting still stays
-quiet. Clicking one opens the PR.
+quiet. A PR that is already in one of those states the first time the dashboard sees it
+does not notify; only a later change does. Clicking one opens the PR.
+
+On every OS, click **Enable notifications** under the headline to get them as browser
+notifications. The server decides when to notify; the open board shows each new one once
+(however many tabs are open), and a board you open fresh shows no backlog. After the
+server restarts, notifications it fires are shown as usual. They work
+while the tab is in the background or the window minimized, but not once the tab is
+closed. On macOS the server also sends its own `osascript` notification, so enabling the
+browser ones there doubles them up — a Mac user who prefers the native ones simply doesn't
+enable browser notifications.
 
 **Staleness.** If the API can't be reached the board keeps showing the last good data
 behind a banner saying so, and keeps retrying every 30s rather than blanking out.
 
 ## Configuration
 
-`config.json` is gitignored, so your copy stays yours. Every field is required.
+`config.json` is gitignored, so your copy stays yours. Every field is required except `scope` and `quietAfterDays`.
 
 | Field | Meaning |
 | --- | --- |
-| `repoPath` | Absolute path to your local clone. Used for the branch list. |
-| `owner` / `name` | The GitHub repo to poll, e.g. `paranext` / `paranext-core`. |
+| `repoPath` | Absolute path to your local clone of the home repo. Used for the branch list. |
+| `owner` / `name` | Your home repo, e.g. `paranext` / `paranext-core`. With the default scope this is the only repo polled. |
+| `scope` | Optional. `"repo"` (the default) tracks your PRs in `owner`/`name` only; `"org"` tracks your open PRs in every repo of `owner`. |
 | `me` | **Your** GitHub login. This is what "your court" is measured against. |
 | `botLogins` | Logins whose reviews and comments don't count as human activity. |
 | `pollIntervalMs` | How often to poll GitHub. Minimum 30000; 180000 (3 min) is the default. |
 | `staleAfterHours` | How long a PR sits unlooked-at before the Discord nudge goes stale. |
+| `quietAfterDays` | Optional. Days without activity after which another person's PR moves to "Gone quiet" on the Others' PRs tab. A positive number; defaults to 30. |
 
 The example file ships with placeholders in angle brackets for the two fields that
 must be yours. The server refuses to start while any placeholder is left in place, and
 refuses to start if `repoPath` doesn't exist — both produce a message naming the field.
+
+With `"scope": "org"`, every card carries a small muted label with its repo name
+(`paratext-10-studio #202 …`) — shown on every card, in either scope — and notifications
+are titled the same way. A PR is identified by repo plus number, so two repos that both
+have a #205 stay separate, including their Discord stamps and notification state. The
+branch list still covers only the home repo's clone at `repoPath`.
 
 Environment overrides, all optional:
 
@@ -162,6 +225,7 @@ src/
     footer.ts     parses the Reviewable footer
     activity.ts   who acted last, ignoring bots and bare merges of main
     checks.ts     failing checks, the check dot, conflict state
+    reviewing.ts  buckets for other people's PRs you have reviewed
     notify.ts     what a notification is keyed on
   github/     GraphQL query, client, and `gh auth token` lookup
   git/        reads local branches via `git for-each-ref`
@@ -173,7 +237,7 @@ client/src/   React board — App, Card, bucket labels and ordering
 ```
 
 The seam worth knowing: `buildBoard()` in `src/server/poller.ts` is a pure function of
-`(prs, branches, store, config, now)`. The poller wraps it with network I/O; demo mode
+`(prs, branches, store, config, now, reviewingPrs)`. The poller wraps it with network I/O; demo mode
 feeds it fixtures. That's why the demo needs no GitHub access.
 
 **To change how PRs are classified**, edit `src/rules/classify.ts` and add a case to
@@ -181,7 +245,8 @@ feeds it fixtures. That's why the demo needs no GitHub access.
 change that breaks a real-world case fails the suite.
 
 **To add a new bucket**, it needs a `Bucket` member in `src/types.ts`, an entry in
-`ORDER` in `src/server/poller.ts`, and a label in `client/src/buckets.ts`.
+`ORDER` (or `REVIEW_ORDER` for the Others' PRs tab) in `src/server/poller.ts`, and a
+label in `client/src/buckets.ts`.
 
 ## Development
 
@@ -198,9 +263,10 @@ an authenticated `gh`.
 
 ## Known limits
 
-- **Notifications are macOS-only.** They shell out to `osascript`. On Linux and
-  Windows `notify()` is a no-op and the server says so once at startup — the board,
-  buckets, and receipts all work normally; you just have to look at the tab.
+- **Notifications need the board open.** Browser notifications work on every OS but only
+  while the board is open in a tab; a closed tab gets none. The native `osascript`
+  notifications are macOS-only and `notify()` is a no-op elsewhere, which the server says
+  once at startup.
 - **One user per checkout.** `me` is a single login, and the SQLite file holds that
   person's notification and Discord state. Teammates each clone and configure their
   own; don't share a working copy.
@@ -209,3 +275,5 @@ an authenticated `gh`.
 - **`gh` is required at startup.** If it's missing or logged out, the server exits
   with an actionable message rather than running blind. Demo mode doesn't need it.
 - **Branches aren't matched to PRs.** See [The buckets](#the-buckets).
+- **The branch list is home-repo only.** With `"scope": "org"` the PRs span the org, but the
+  branches still come from the single clone at `repoPath`.

@@ -25,7 +25,7 @@ export function Card({ item, now, onChange }: {
   onChange: () => void;
 }) {
   const post = async () => {
-    await markPostedToDiscord(item.number, true);
+    await markPostedToDiscord(item.repo, item.number, true);
     onChange();
   };
 
@@ -34,6 +34,8 @@ export function Card({ item, now, onChange }: {
       <div className="card-head">
         <span className="dot" style={{ background: DOT[item.checkDot] }} />
         <a href={item.url} target="_blank" rel="noreferrer">
+          <span className="repo">{item.repo.split('/')[1] ?? item.repo}</span>{' '}
+          {item.role === 'reviewer' && <span className="repo">by {item.author}{' '}</span>}
           #{item.number} {item.title}
         </a>
         <span className="age">{ago(item.displayTime, now)}</span>
@@ -49,7 +51,7 @@ export function Card({ item, now, onChange }: {
         </ul>
       )}
 
-      {(item.bucket === 'not-asked' || item.bucket === 'draft') && (
+      {item.role === 'author' && (item.bucket === 'not-asked' || item.bucket === 'draft') && (
         <button type="button" onClick={post}>Posted to Discord</button>
       )}
     </li>

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Poller } from './poller.js';
 import type { Store } from '../store/db.js';
+import { prKey } from '../pr-key.js';
+import { isGithubName, parsePrNumber } from './params.js';
 
 export function registerRoutes(
   app: FastifyInstance, poller: Poller, store: Store,
@@ -9,22 +11,28 @@ export function registerRoutes(
     const board = poller.snapshot();
     if (board === null) {
       return reply.send({
-        items: [], branches: [], yourCourtCount: 0,
+        items: [], reviewing: [], branches: [],
+        yourCourtCount: 0, myCourtCount: 0, reviewCourtCount: 0,
         fetchedAt: null, stale: true, error: 'no data yet — retrying',
+        notifications: [], epoch: '',
       });
     }
     return reply.send(board);
   });
 
-  app.post<{ Params: { number: string }; Body: { posted: boolean } }>(
-    '/api/pr/:number/discord',
+  app.post<{ Params: { owner: string; name: string; number: string }; Body: { posted: boolean } }>(
+    '/api/pr/:owner/:name/:number/discord',
     async (request, reply) => {
-      const number = Number(request.params.number);
-      if (!Number.isInteger(number)) {
+      const { owner, name } = request.params;
+      const number = parsePrNumber(request.params.number);
+      if (number === null) {
         return reply.code(400).send({ error: 'bad PR number' });
       }
+      if (!isGithubName(owner) || !isGithubName(name)) {
+        return reply.code(400).send({ error: 'bad repo' });
+      }
       store.setDiscordPostedAt(
-        number,
+        prKey(`${owner}/${name}`, number),
         request.body?.posted === false ? null : new Date().toISOString(),
       );
       await poller.refresh();

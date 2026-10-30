@@ -22,6 +22,31 @@ describe('loadConfig', () => {
     expect(loadConfig(write(valid))).toEqual(valid);
   });
 
+  it('leaves scope unset when the config omits it', () => {
+    expect(loadConfig(write(valid)).scope).toBeUndefined();
+  });
+
+  it.each(['repo', 'org'])('accepts scope "%s"', (scope) => {
+    expect(loadConfig(write({ ...valid, scope })).scope).toBe(scope);
+  });
+
+  it('rejects an unknown scope, naming the field', () => {
+    expect(() => loadConfig(write({ ...valid, scope: 'everything' })))
+      .toThrow(/scope/);
+  });
+
+  it('leaves quietAfterDays unset when omitted', () => {
+    expect(loadConfig(write(valid)).quietAfterDays).toBeUndefined();
+  });
+
+  it('accepts a positive quietAfterDays', () => {
+    expect(loadConfig(write({ ...valid, quietAfterDays: 14 })).quietAfterDays).toBe(14);
+  });
+
+  it.each([0, -3, '30', null])('rejects quietAfterDays %j, naming the field', (quietAfterDays) => {
+    expect(() => loadConfig(write({ ...valid, quietAfterDays }))).toThrow(/quietAfterDays/);
+  });
+
   it('names the missing field', () => {
     const { me, ...rest } = valid;
     expect(() => loadConfig(write(rest))).toThrow(/me/);

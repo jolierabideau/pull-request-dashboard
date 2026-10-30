@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { mapPullRequest } from '../src/github/client.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchOpenPrs, fetchReviewingPrs, mapPullRequest } from '../src/github/client.js';
+import type { Config } from '../src/types.js';
 import { checkDot } from '../src/rules/checks.js';
 
 const baseNode = {
   number: 1,
   title: 't',
-  url: 'u',
+  url: 'https://github.com/paranext/paranext-core/pull/1',
   isDraft: false,
   mergeable: 'MERGEABLE',
   mergeStateStatus: 'CLEAN',
@@ -95,5 +96,126 @@ describe('mapPullRequest — StatusContext mapping', () => {
     expect(pr.checks).toEqual([
       { name: 'build', status: 'IN_PROGRESS', conclusion: null },
     ]);
+  });
+});
+
+describe('mapPullRequest — repo identity', () => {
+  it('derives the repo from the PR url', () => {
+    const pr = mapPullRequest({
+      ...baseNode, url: 'https://github.com/paranext/paratext-10-studio/pull/202',
+    });
+    expect(pr.repo).toBe('paranext/paratext-10-studio');
+  });
+
+  it('throws when the url does not name a repo', () => {
+    expect(() => mapPullRequest({ ...baseNode, url: 'u' })).toThrow(/which repo/);
+  });
+});
+
+describe('mapPullRequest — author and update time', () => {
+  it('maps the author login and updatedAt', () => {
+    const pr = mapPullRequest({
+      ...baseNode, author: { login: 'alice' }, updatedAt: '2026-09-01T00:00:00Z',
+    });
+    expect(pr.author).toBe('alice');
+    expect(pr.updatedAt).toBe('2026-09-01T00:00:00Z');
+  });
+
+  it('defaults a missing author to unknown', () => {
+    expect(mapPullRequest({ ...baseNode, author: null }).author).toBe('unknown');
+  });
+});
+
+describe('fetchReviewingPrs', () => {
+  const cfg: Config = {
+    repoPath: '/tmp', owner: 'paranext', name: 'paranext-core',
+    me: 'jolierabideau', botLogins: [], pollIntervalMs: 180000, staleAfterHours: 48,
+  };
+
+  const node = (repo: string, number: number) => ({
+    ...baseNode, number, url: `https://github.com/${repo}/pull/${number}`,
+  });
+
+  /** Answers each search by its query text and records every query asked. */
+  const stubSearch = (answers: Record<string, unknown[]>) => {
+    const queries: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
+      const { q } = (JSON.parse(init.body) as { variables: { q: string } }).variables;
+      queries.push(q);
+      const key = Object.keys(answers).find((k) => q.includes(k));
+      return new Response(
+        JSON.stringify({ data: { search: { nodes: answers[key ?? ''] ?? [] } } }),
+        { status: 200 },
+      );
+    }));
+    return queries;
+  };
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('searches reviewed-by and commenter, excluding the user own PRs', async () => {
+    const queries = stubSearch({});
+    await fetchReviewingPrs(cfg);
+    expect(queries.sort()).toEqual([
+      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau commenter:jolierabideau sort:updated-desc',
+      'repo:paranext/paranext-core is:pr is:open -author:jolierabideau reviewed-by:jolierabideau sort:updated-desc',
+    ]);
+  });
+
+  it('fails when one of the two searches fails', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response('boom', { status: 500, statusText: 'Server Error' })
+        : new Response(JSON.stringify({ data: { search: { nodes: [] } } }), { status: 200 });
+    }));
+    await expect(fetchReviewingPrs(cfg)).rejects.toThrow(/500/);
+  });
+
+  it('searches the whole org when scope is org', async () => {
+    const queries = stubSearch({});
+    await fetchReviewingPrs({ ...cfg, scope: 'org' });
+    expect(queries.every((q) => q.startsWith('org:paranext is:pr is:open -author:'))).toBe(true);
+  });
+
+  it('merges both searches and drops PRs found by both', async () => {
+    stubSearch({
+      'reviewed-by:jolierabideau': [node('paranext/paranext-core', 1), node('paranext/paranext-core', 2)],
+      'commenter:jolierabideau': [node('paranext/paranext-core', 2), node('paranext/paratext-10-studio', 2)],
+    });
+    const prs = await fetchReviewingPrs(cfg);
+    expect(prs.map((p) => `${p.repo}#${p.number}`).sort()).toEqual([
+      'paranext/paranext-core#1', 'paranext/paranext-core#2', 'paranext/paratext-10-studio#2',
+    ]);
+  });
+});
+
+describe('fetchOpenPrs — search scope', () => {
+  const cfg: Config = {
+    repoPath: '/tmp', owner: 'paranext', name: 'paranext-core',
+    me: 'jolierabideau', botLogins: [], pollIntervalMs: 180000, staleAfterHours: 48,
+  };
+
+  const searchedQuery = async (config: Config): Promise<string> => {
+    const fetchMock = vi.fn(async (_url: string, _init: { body: string }) => new Response(
+      JSON.stringify({ data: { search: { nodes: [] } } }), { status: 200 },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchOpenPrs(config);
+    const init = fetchMock.mock.calls[0]?.[1];
+    return (JSON.parse(init?.body ?? '{}') as { variables: { q: string } }).variables.q;
+  };
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('searches the one repo by default', async () => {
+    expect(await searchedQuery(cfg))
+      .toBe('repo:paranext/paranext-core is:pr is:open author:jolierabideau sort:updated-desc');
+  });
+
+  it('searches the whole org when scope is org', async () => {
+    expect(await searchedQuery({ ...cfg, scope: 'org' }))
+      .toBe('org:paranext is:pr is:open author:jolierabideau sort:updated-desc');
   });
 });

@@ -1,14 +1,18 @@
 import type { CheckContext, Config, PrInput } from '../types.js';
 import { clearTokenCache, getToken } from './token.js';
 import { LIST_QUERY } from './query.js';
+import { prKey, repoFromUrl } from '../pr-key.js';
 
 interface GqlNode { [key: string]: any }
 
 export function mapPullRequest(node: GqlNode): PrInput {
   return {
+    repo: repoFromUrl(node.url),
     number: node.number,
     title: node.title,
     url: node.url,
+    author: node.author?.login ?? 'unknown',
+    updatedAt: node.updatedAt ?? '',
     isDraft: node.isDraft,
     headOid: node.headRefOid,
     mergeable: node.mergeable,
@@ -75,10 +79,39 @@ function mapStatusContext(c: GqlNode): CheckContext {
   }
 }
 
-export async function fetchOpenPrs(cfg: Config): Promise<PrInput[]> {
-  const q = `repo:${cfg.owner}/${cfg.name} is:pr is:open author:${cfg.me}`;
-  const data = await graphql<{ search: { nodes: GqlNode[] } }>(LIST_QUERY, { q });
+const searchScope = (cfg: Config): string =>
+  cfg.scope === 'org' ? `org:${cfg.owner}` : `repo:${cfg.owner}/${cfg.name}`;
+
+/** Each search returns at most 50 PRs, so ask for the most recently updated ones. */
+async function searchPrs(q: string): Promise<PrInput[]> {
+  const data = await graphql<{ search: { nodes: GqlNode[] } }>(
+    LIST_QUERY, { q: `${q} sort:updated-desc` },
+  );
   return data.search.nodes.filter((n) => n.number !== undefined).map(mapPullRequest);
+}
+
+export function fetchOpenPrs(cfg: Config): Promise<PrInput[]> {
+  return searchPrs(`${searchScope(cfg)} is:pr is:open author:${cfg.me}`);
+}
+
+/**
+ * Open PRs by other people that `me` has reviewed or commented on. GitHub has
+ * no single qualifier for "reviewed or commented", so two searches run
+ * concurrently and their results are merged by PR identity. If either search
+ * fails the whole fetch fails, rather than returning a partial list.
+ */
+export async function fetchReviewingPrs(cfg: Config): Promise<PrInput[]> {
+  const base = `${searchScope(cfg)} is:pr is:open -author:${cfg.me}`;
+  const [reviewed, commented] = await Promise.all([
+    searchPrs(`${base} reviewed-by:${cfg.me}`),
+    searchPrs(`${base} commenter:${cfg.me}`),
+  ]);
+  const byKey = new Map<string, PrInput>();
+  for (const pr of [...reviewed, ...commented]) {
+    const key = prKey(pr.repo, pr.number);
+    if (!byKey.has(key)) byKey.set(key, pr);
+  }
+  return [...byKey.values()];
 }
 
 async function graphql<T>(

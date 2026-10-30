@@ -10,6 +10,8 @@ import { pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
 import { buildBoard, type Board } from './poller.js';
 import { openStore, type Store } from '../store/db.js';
+import { prKey, repoFromUrl } from '../pr-key.js';
+import { isGithubName, parsePrNumber } from './params.js';
 import type { BranchInput, Config, PrInput } from '../types.js';
 
 /** The PRs captured by scripts/capture-fixtures.ts. */
@@ -42,10 +44,23 @@ const DEMO_BRANCHES: BranchInput[] = [
   { name: 'fix/menu-crash', upstreamGone: true, aheadOfMain: 1, prNumber: null },
 ];
 
-const loadFixture = (n: number): PrInput =>
-  JSON.parse(
+const DEMO_HOME_REPO = `${DEMO_CONFIG.owner}/${DEMO_CONFIG.name}`;
+
+/**
+ * Fixtures captured before PRs carried a `repo`, `author` or review requests
+ * get the repo from their URL; every fixture is one of the demo user's own PRs.
+ */
+const loadFixture = (n: number): PrInput => {
+  const fixture = JSON.parse(
     readFileSync(new URL(`../../tests/fixtures/pr-${n}.json`, import.meta.url), 'utf8'),
-  ) as PrInput;
+  ) as Partial<PrInput> & Pick<PrInput, 'url'>;
+  return {
+    ...fixture,
+    repo: fixture.repo ?? repoFromUrl(fixture.url),
+    author: fixture.author ?? DEMO_CONFIG.me,
+    updatedAt: fixture.updatedAt ?? DEMO_NOW.toISOString(),
+  } as PrInput;
+};
 
 /**
  * Builds the demo board. Pass a `store` to keep the Discord state between
@@ -54,7 +69,7 @@ const loadFixture = (n: number): PrInput =>
  * Discord state in pr-dashboard.db.
  */
 export function buildDemoBoard(store?: Store): Board {
-  const scratch = store ?? openStore(':memory:');
+  const scratch = store ?? openStore(':memory:', DEMO_HOME_REPO);
   try {
     return buildBoard(FIXTURES.map(loadFixture), DEMO_BRANCHES, scratch, DEMO_CONFIG, DEMO_NOW);
   } finally {
@@ -65,23 +80,26 @@ export function buildDemoBoard(store?: Store): Board {
 export async function serveDemo(port: number): Promise<void> {
   // Held open for the life of the process so that clicking "Posted to
   // Discord" actually moves the card, as it does on the real board.
-  const store = openStore(':memory:');
+  const store = openStore(':memory:', DEMO_HOME_REPO);
   let board = buildDemoBoard(store);
 
   const app = Fastify({ logger: false });
   app.get('/api/board', async (_request, reply) => reply.send(board));
 
-  app.post<{ Params: { number: string }; Body: { posted: boolean } }>(
-    '/api/pr/:number/discord',
+  app.post<{ Params: { owner: string; name: string; number: string }; Body: { posted: boolean } }>(
+    '/api/pr/:owner/:name/:number/discord',
     async (request, reply) => {
-      const number = Number(request.params.number);
-      if (!Number.isInteger(number)) {
+      const number = parsePrNumber(request.params.number);
+      if (number === null) {
         return reply.code(400).send({ error: 'bad PR number' });
+      }
+      if (!isGithubName(request.params.owner) || !isGithubName(request.params.name)) {
+        return reply.code(400).send({ error: 'bad repo' });
       }
       // Stamped with the pinned clock, not the wall clock, so the receipt
       // ("posted to Discord Nh ago") stays reproducible.
       store.setDiscordPostedAt(
-        number,
+        prKey(`${request.params.owner}/${request.params.name}`, number),
         request.body?.posted === false ? null : DEMO_NOW.toISOString(),
       );
       board = buildDemoBoard(store);

@@ -6,12 +6,18 @@ import { createPoller } from './poller.js';
 import { registerRoutes } from './routes.js';
 
 const config = loadConfig(process.env.PRD_CONFIG ?? 'config.json');
-const store = openStore(process.env.PRD_DB ?? 'pr-dashboard.db');
+const store = openStore(
+  process.env.PRD_DB ?? 'pr-dashboard.db',
+  `${config.owner}/${config.name}`,
+);
 const poller = createPoller(config, store);
 
-console.log(`Tracking ${config.me} on ${config.owner}/${config.name} (${config.repoPath})`);
+const tracked = config.scope === 'org' ? `every repo of ${config.owner}` : `${config.owner}/${config.name}`;
+console.log(`Tracking ${config.me} on ${tracked} (branches from ${config.repoPath})`);
 if (!notificationsSupported()) {
-  console.log('Desktop notifications are macOS-only; the board still works.');
+  console.log(
+    'Desktop notifications: open the board and click "Enable notifications" (browser notifications).',
+  );
 }
 
 const app = Fastify({ logger: { level: 'warn' } });

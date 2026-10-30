@@ -46,27 +46,55 @@ export function lastReviewerActivity(pr: PrInput, cfg: Config): Stamp | null {
   return newest(stamps);
 }
 
+export type ActivityKind = 'pushed' | 'commented' | 'replied in review' | 'replied in thread';
+
+export interface ActivityOptions {
+  /** Count substantive commits the user wrote (not bare merges of main). */
+  commits: boolean;
+  /** Count the user being the last commenter of a review thread. */
+  threads: boolean;
+}
+
+/**
+ * The newest thing `login` did on the PR: a review, an issue comment, and
+ * optionally pushes and review-thread replies. Bots are not filtered; callers
+ * name the one person they care about.
+ */
+export function lastActivityOf(
+  pr: PrInput,
+  login: string,
+  options: ActivityOptions,
+): { at: string; what: ActivityKind } | null {
+  const stamps: { at: string; what: ActivityKind }[] = [];
+
+  if (options.commits) {
+    for (const commit of pr.commits) {
+      if (!isSubstantiveCommit(commit, login)) continue;
+      stamps.push({ at: commit.committedDate, what: 'pushed' });
+    }
+  }
+  for (const comment of pr.comments) {
+    if (comment.author !== login) continue;
+    stamps.push({ at: comment.createdAt, what: 'commented' });
+  }
+  for (const review of pr.reviews) {
+    if (review.author !== login || review.state === 'PENDING') continue;
+    stamps.push({ at: review.submittedAt, what: 'replied in review' });
+  }
+  if (options.threads) {
+    for (const thread of pr.threads) {
+      if (thread.lastCommentAuthor !== login) continue;
+      stamps.push({ at: thread.lastCommentAt, what: 'replied in thread' });
+    }
+  }
+  return newest(stamps);
+}
+
 export function lastMyActivity(
   pr: PrInput,
   cfg: Config,
 ): { at: string; what: string } | null {
-  const stamps: { at: string; who: string; what: string }[] = [];
-
-  for (const commit of pr.commits) {
-    if (!isSubstantiveCommit(commit, cfg.me)) continue;
-    stamps.push({ at: commit.committedDate, who: cfg.me, what: 'pushed' });
-  }
-  for (const comment of pr.comments) {
-    if (comment.author !== cfg.me) continue;
-    stamps.push({ at: comment.createdAt, who: cfg.me, what: 'commented' });
-  }
-  for (const review of pr.reviews) {
-    if (review.author !== cfg.me) continue;
-    stamps.push({ at: review.submittedAt, who: cfg.me, what: 'replied in review' });
-  }
-
-  const best = newest(stamps) as { at: string; what: string } | null;
-  return best;
+  return lastActivityOf(pr, cfg.me, { commits: true, threads: false });
 }
 
 function newest<T extends { at: string }>(stamps: T[]): T | null {
